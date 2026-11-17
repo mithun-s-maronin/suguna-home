@@ -11,8 +11,8 @@ android {
         applicationId = "com.suguna.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         val dbUrl = (project.findProperty("DB_URL") as String?) ?: System.getenv("DB_URL") ?: ""
         val dbSecret = (project.findProperty("DB_SECRET") as String?) ?: System.getenv("DB_SECRET") ?: ""
