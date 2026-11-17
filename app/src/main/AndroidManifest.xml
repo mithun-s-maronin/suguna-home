@@ -26,6 +26,11 @@
         tools:ignore="ProtectedPermissions" />
     <!-- Full-screen overlay used by the permanent remote lock -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Delete the sideloaded installer APK after setup (best-effort) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!-- Android 11+ hides other apps unless we declare which ones we look at -->
     <queries>

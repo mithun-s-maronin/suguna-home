@@ -55,6 +55,7 @@ object Kiosk {
             val allow = linkedSetOf(activity.packageName)
             allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
             allow.addAll(Prefs(activity).pinnedApps)
+            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
             dpm.setLockTaskPackages(admin, allow.toTypedArray())
         } catch (e: Exception) {
             Log.w(TAG, "setLockTaskPackages failed: ${e.message}")

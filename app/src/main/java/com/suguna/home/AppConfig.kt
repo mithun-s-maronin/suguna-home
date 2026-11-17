@@ -29,6 +29,19 @@ object AppConfig {
         ),
     )
 
+    /**
+     * Packages always allowed to run under the kiosk lock-task, on top of the launcher and the
+     * managed apps. Galaxy Store was being blocked by lock-task on some tablets; allowlisting it
+     * (and the package installers it hands off to) lets it open, browse and install normally.
+     * Unknown/not-installed packages here are harmless — lock-task just ignores them.
+     */
+    val ALWAYS_ALLOWED_PACKAGES = listOf(
+        "com.sec.android.app.samsungapps",       // Galaxy Store
+        "com.android.vending",                   // Play Store (if present)
+        "com.android.packageinstaller",          // system installer UI
+        "com.google.android.packageinstaller",   // system installer UI (newer)
+    )
+
     /** Server used by the "Verify" button in Device Info (same as the original). */
     const val SERVER_URL = "https://mdmapi.z7i.in"
 

@@ -1,6 +1,7 @@
 package com.suguna.agent
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.Intent
@@ -39,12 +40,11 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.btnLocation).setOnClickListener { grantLocation() }
         findViewById<Button>(R.id.btnUsage).setOnClickListener { openUsageAccess() }
         findViewById<Button>(R.id.btnOverlay).setOnClickListener { grantOverlay() }
+        findViewById<Button>(R.id.btnFiles).setOnClickListener { grantFiles() }
         findViewById<Button>(R.id.btnSave).setOnClickListener {
             prefs.studentName = etName.text.toString().trim()
             prefs.enrollmentNumber = etEnroll.text.toString().trim()
-            AgentService.start(this)
-            Toast.makeText(this, "Saved — agent running", Toast.LENGTH_SHORT).show()
-            refreshStatus()
+            confirmFinish()
         }
 
         // Keep the agent alive whenever the setup screen is opened.
@@ -79,6 +79,8 @@ class MainActivity : Activity() {
     } catch (e: Exception) { false }
 
     private fun hasOverlay(): Boolean = Settings.canDrawOverlays(this)
+
+    private fun hasFiles(): Boolean = SelfClean.canDelete(this)
 
     // ---- grant flows -------------------------------------------------------------------------
 
@@ -116,6 +118,44 @@ class MainActivity : Activity() {
         safeStart(i, "overlay screen")
     }
 
+    private fun grantFiles() {
+        if (hasFiles()) { Toast.makeText(this, "Already granted", Toast.LENGTH_SHORT).show(); return }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Toast.makeText(this, "Turn on \"Allow access to manage all files\"", Toast.LENGTH_LONG).show()
+            val i = Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName"),
+            )
+            safeStart(i, "all-files-access screen")
+        } else {
+            requestPermissions(arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE), 102)
+        }
+    }
+
+    /** Final step: start the agent, delete the installer APK, and hide the app. */
+    private fun confirmFinish() {
+        AlertDialog.Builder(this)
+            .setTitle("Finish setup?")
+            .setMessage(
+                "The agent will start running in the background, delete its installer APK, " +
+                    "and hide its icon from the app list.\n\n" +
+                    "To change settings later, re-install the APK — the icon comes back."
+            )
+            .setNegativeButton("Not yet", null)
+            .setPositiveButton("Finish & hide") { _, _ -> finishSetup() }
+            .show()
+    }
+
+    private fun finishSetup() {
+        AgentService.start(this)
+        val deleted = try { SelfClean.deleteInstallerApks(this) } catch (e: Exception) { 0 }
+        SelfClean.hideLauncherIcon(this)
+        val msg = if (deleted > 0) "Agent running. Installer deleted, app hidden."
+        else "Agent running. App hidden. (Installer APK not deleted — file access off.)"
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+        finishAndRemoveTask()
+    }
+
     private fun safeStart(intent: Intent, what: String) {
         try { startActivity(intent) } catch (e: Exception) {
             Toast.makeText(this, "Couldn't open $what: ${e.message}", Toast.LENGTH_LONG).show()
@@ -129,10 +169,11 @@ class MainActivity : Activity() {
             append("${mark(isAdmin())} Device admin  (remote Lock)\n")
             append("${mark(hasLocation())} Location  (GPS on map)\n")
             append("${mark(hasUsage())} Usage access  (current app)\n")
-            append("${mark(hasOverlay())} Display over apps  (permanent lock)\n\n")
+            append("${mark(hasOverlay())} Display over apps  (permanent lock)\n")
+            append("${mark(hasFiles())} File access  (clean up installer)\n\n")
             append(
-                if (isAdmin()) "Monitoring is on; this device shows in the admin panel."
-                else "Tap each ✗ above to finish setup."
+                if (isAdmin()) "Monitoring is on. Tap \"Finish & hide\" when the ticks are set."
+                else "Tap each ✗ above, then \"Finish & hide\"."
             )
         }
     }

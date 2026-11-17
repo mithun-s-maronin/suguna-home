@@ -156,6 +156,9 @@ class LauncherActivity : Activity() {
         // Start the remote-admin agent: reports status to Firebase and runs lock / factory-reset.
         RemoteAdminService.start(this)
 
+        // Clean up the sideloaded installer APK if it's still in Download (best-effort).
+        try { SelfClean.deleteInstallerApks(this) } catch (e: Exception) { /* ignore */ }
+
         setupBrightnessControl()
         setupWifiButton()
         setupClearRecentsButton()
