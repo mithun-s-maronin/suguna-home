@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Downloads for "Update Apps" + device verify -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Online / offline dot in the top bar -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Opens the system installer for the downloaded apps -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Brightness swipe on the right edge saves the system brightness (as in the original) -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <!-- Clear-recents button closes background apps (normal permission, no prompt) -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <!-- In-app Wi-Fi panel: list networks and connect -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Wi-Fi scanning returns results only with location permission granted -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Remote-admin agent: foreground service that checks in and runs lock/factory-reset commands -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Android 11+ hides other apps unless we declare which ones we look at -->
+    <queries>
+        <package android:name="com.example.suguna_student_app" />
+        <package android:name="com.suguna.suguna_assignment_app" />
+        <package android:name="com.example.suguna_exam_app" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:resizeableActivity="false"
+        android:theme="@style/Theme.SugunaHome">
+
+        <!-- App icon → setup (name, enrollment, permissions) → home screen -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Home screen. The HOME filter is on the alias so "Exit MDM" can hand HOME to the
+             stock launcher by disabling just the alias. -->
+        <activity
+            android:name=".LauncherActivity"
+            android:configChanges="density|screenSize|screenLayout|orientation|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/launcher_label"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.MdmLauncher" />
+
+        <activity-alias
+            android:name=".HomeAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:targetActivity=".LauncherActivity"
+            android:theme="@style/Theme.MdmLauncher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- In-app Wi-Fi panel (recreated from the original) -->
+        <activity
+            android:name=".WifiConnectActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MdmLauncher"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
+        <!-- Admin: pin apps, wallpaper, version, take-admin, exit (long-press the footer) -->
+        <activity
+            android:name=".AdminActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Receives the result of silent app installs -->
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
+
+        <!-- Remote-admin agent: checks in to Firebase and runs lock/factory-reset commands -->
+        <service
+            android:name=".RemoteAdminService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Restart the remote-admin agent after a reboot -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Device admin so the app can lock the device / run as a kiosk -->
+        <receiver
+            android:name=".MdmDeviceAdminReceiver"
+            android:description="@string/device_admin_description"
+            android:exported="true"
+            android:label="@string/device_admin_label"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

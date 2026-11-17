@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Sure MDM</string>
+    <string name="launcher_label">Sure MDM</string>
+
+    <!-- Setup screen -->
+    <string name="setup_title">Welcome to Sure MDM</string>
+    <string name="setup_subtitle">Complete these steps once to set up your phone.</string>
+    <string name="setup_section_details">1. Your details</string>
+    <string name="setup_section_permissions">2. Permissions</string>
+    <string name="hint_name">Full name</string>
+    <string name="hint_enrollment">Enrollment number</string>
+    <string name="btn_finish">Finish setup</string>
+    <string name="btn_enable">Enable</string>
+    <string name="perm_required">Required</string>
+    <string name="perm_optional">Optional</string>
+    <string name="perm_enabled">✓ Enabled</string>
+    <string name="perm_not_enabled">Not enabled yet</string>
+
+    <!-- Device admin (needed so the app can run lock-task as Device Owner) -->
+    <string name="device_admin_label">Sure MDM Admin</string>
+    <string name="device_admin_description">Lets Sure MDM lock the device and run as a managed kiosk home screen.</string>
+    <string name="admin_add_explanation">Sure MDM needs admin access to run as a locked kiosk home screen.</string>
+
+</resources>
