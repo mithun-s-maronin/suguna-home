@@ -50,6 +50,11 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_PIN_LOCKOUT, 0L)
         set(value) = sp.edit().putLong(KEY_PIN_LOCKOUT, value).apply()
 
+    /** True while under a permanent remote lock that only the admin panel can release. */
+    var permLocked: Boolean
+        get() = sp.getBoolean(KEY_PERM_LOCKED, false)
+        set(value) = sp.edit().putBoolean(KEY_PERM_LOCKED, value).apply()
+
     private companion object {
         const val KEY_DEVICE_VERIFIED = "device_verified"
         const val KEY_PINNED_APPS = "pinned_apps"
@@ -57,6 +62,7 @@ class Prefs(context: Context) {
         const val KEY_ADMIN_PIN = "admin_pin"
         const val KEY_PIN_FAILS = "pin_fail_count"
         const val KEY_PIN_LOCKOUT = "pin_lockout_until"
+        const val KEY_PERM_LOCKED = "perm_locked"
         const val FILE_NAME = "suguna_home"
         const val KEY_NAME = "student_name"
         const val KEY_ENROLLMENT = "enrollment_number"
