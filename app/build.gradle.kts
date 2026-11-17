@@ -26,9 +26,24 @@ android {
         buildConfig = true
     }
 
+    // Stable signing key so every build has the same signature → tablets can be updated in place
+    // (without this, each cloud build would be signed differently and need a wipe to update).
+    signingConfigs {
+        create("stable") {
+            storeFile = file("suguna.keystore")
+            storePassword = "sugunahome"
+            keyAlias = "suguna"
+            keyPassword = "sugunahome"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("stable")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stable")
         }
     }
 
