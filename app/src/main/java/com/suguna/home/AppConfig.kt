@@ -42,6 +42,16 @@ object AppConfig {
         "com.google.android.packageinstaller",   // system installer UI (newer)
     )
 
+    /**
+     * Allowed under the kiosk lock-task while Admin → "Gemini on the side button" is on, so
+     * One UI's side-button long-press (Digital assistant → Gemini, "Ask about screen") isn't
+     * blocked: the Google app (hosts the Gemini overlay) and the Gemini app.
+     */
+    val GEMINI_PACKAGES = listOf(
+        "com.google.android.googlequicksearchbox",
+        "com.google.android.apps.bard",
+    )
+
     /** Server used by the "Verify" button in Device Info (same as the original). */
     const val SERVER_URL = "https://mdmapi.z7i.in"
 

@@ -8,7 +8,6 @@ import android.app.NotificationManager
 import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -52,16 +51,8 @@ class RemoteAdminService : Service() {
     @Volatile private var running = false
     private val main = Handler(Looper.getMainLooper())
     private var overlay: View? = null
-    private var geminiReceiver: BroadcastReceiver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onCreate() {
-        super.onCreate()
-        // Side-button long-press → Gemini "Ask about screen". Lives here because this service is
-        // always running (foreground, restarted on boot), so the listener is always active.
-        geminiReceiver = GeminiAssist.register(this)
-    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification())
@@ -79,8 +70,6 @@ class RemoteAdminService : Service() {
 
     override fun onDestroy() {
         running = false
-        GeminiAssist.unregister(this, geminiReceiver)
-        geminiReceiver = null
         super.onDestroy()
     }
 

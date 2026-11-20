@@ -17,16 +17,4 @@
         <item name="android:statusBarColor">#1a1a2e</item>
         <item name="android:navigationBarColor">#1a1a2e</item>
     </style>
-
-    <!-- Gemini trigger (GeminiAssistActivity): fully see-through, no dim, no animation -->
-    <style name="Theme.GeminiTrigger" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:backgroundDimEnabled">false</item>
-        <item name="android:windowAnimationStyle">@null</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-    </style>
 </resources>

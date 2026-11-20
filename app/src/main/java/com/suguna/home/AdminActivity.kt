@@ -81,20 +81,12 @@ class AdminActivity : Activity() {
             Kiosk.refreshLockTaskPackages(this)
             updateGeminiStatus()
         }
-        findViewById<Button>(R.id.btnTestGemini).setOnClickListener {
-            if (prefs.geminiShortcut) {
-                GeminiAssist.launch(this)
-            } else {
-                Toast.makeText(this, "Turn the switch on first", Toast.LENGTH_SHORT).show()
-            }
-        }
         updateGeminiStatus()
     }
 
     private fun updateGeminiStatus() {
-        val last = prefs.geminiLastSignal.ifBlank { "none yet" }
         findViewById<TextView>(R.id.tvGeminiStatus).text = if (prefs.geminiShortcut) {
-            "On. Last side-button signal: $last"
+            "On. Holding the side button opens Gemini (One UI: Side button → Long press → Digital assistant)."
         } else {
             "Off. Gemini is blocked in the kiosk."
         }

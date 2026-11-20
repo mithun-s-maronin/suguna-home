@@ -112,7 +112,7 @@ object Kiosk {
         allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
         allow.addAll(prefs.pinnedApps)
         allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)
-        if (prefs.geminiShortcut) allow.addAll(GeminiAssist.PACKAGES)
+        if (prefs.geminiShortcut) allow.addAll(AppConfig.GEMINI_PACKAGES)
         return allow.toTypedArray()
     }
 
