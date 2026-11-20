@@ -50,13 +50,7 @@ object Kiosk {
         val admin = MdmDeviceAdminReceiver.component(activity)
 
         try {
-            // Allowlist the launcher AND the apps on the home screen, otherwise lock-task blocks
-            // them from opening. Without this the three student apps can't be launched.
-            val allow = linkedSetOf(activity.packageName)
-            allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
-            allow.addAll(Prefs(activity).pinnedApps)
-            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
-            dpm.setLockTaskPackages(admin, allow.toTypedArray())
+            dpm.setLockTaskPackages(admin, lockTaskAllowlist(activity))
         } catch (e: Exception) {
             Log.w(TAG, "setLockTaskPackages failed: ${e.message}")
         }
@@ -104,6 +98,34 @@ object Kiosk {
             }
         } catch (e: Exception) {
             Log.w(TAG, "startLockTask failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Apps lock-task lets run: the launcher AND the apps on the home screen (otherwise lock-task
+     * blocks them from opening), Galaxy Store + installers, and — while the Gemini side-button
+     * shortcut is on — the Google/Gemini apps, so the assistant can open over the kiosk.
+     */
+    fun lockTaskAllowlist(context: Context): Array<String> {
+        val prefs = Prefs(context)
+        val allow = linkedSetOf(context.packageName)
+        allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+        allow.addAll(prefs.pinnedApps)
+        allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)
+        if (prefs.geminiShortcut) allow.addAll(GeminiAssist.PACKAGES)
+        return allow.toTypedArray()
+    }
+
+    /** Re-apply the lock-task allowlist right away (e.g. after the Gemini switch changes). */
+    fun refreshLockTaskPackages(context: Context) {
+        if (!isDeviceOwner(context)) return
+        try {
+            dpm(context).setLockTaskPackages(
+                MdmDeviceAdminReceiver.component(context),
+                lockTaskAllowlist(context),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "setLockTaskPackages failed: ${e.message}")
         }
     }
 

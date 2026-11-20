@@ -11,8 +11,8 @@ android {
         applicationId = "com.suguna.home"
         minSdk = 26
         targetSdk = 34
-        versionCode = 35
-        versionName = "1.5"
+        versionCode = 36
+        versionName = "1.6"
 
         // Firebase Realtime Database config for the remote-admin agent. Injected at build time via
         // -PDB_URL / -PDB_SECRET (or env), so the secret is never committed to the repo.

@@ -102,6 +102,18 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Side-button long-press → Gemini "Ask about screen": a see-through activity that opens
+             the assistant over the current app. Its own task, so the screenshot Gemini gets is the
+             app underneath, not the home screen. -->
+        <activity
+            android:name=".GeminiAssistActivity"
+            android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity="com.suguna.home.gemini"
+            android:theme="@style/Theme.GeminiTrigger" />
+
         <!-- Receives the result of silent app installs -->
         <receiver
             android:name=".InstallResultReceiver"

@@ -14,6 +14,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -63,9 +64,40 @@ class AdminActivity : Activity() {
         findViewById<Button>(R.id.btnFactoryReset).setOnClickListener { confirmFactoryReset() }
 
         setupVolumeControl()
+        setupGemini()
         updateAdminStatus()
         updateWallpaperState()
         buildAppList()
+    }
+
+    // ── Gemini on the side button ──────────────────────────────────────
+
+    private fun setupGemini() {
+        val sw = findViewById<Switch>(R.id.swGemini)
+        sw.isChecked = prefs.geminiShortcut
+        sw.setOnCheckedChangeListener { _, on ->
+            prefs.geminiShortcut = on
+            // Adds/removes the Google + Gemini apps from the kiosk allowlist straight away.
+            Kiosk.refreshLockTaskPackages(this)
+            updateGeminiStatus()
+        }
+        findViewById<Button>(R.id.btnTestGemini).setOnClickListener {
+            if (prefs.geminiShortcut) {
+                GeminiAssist.launch(this)
+            } else {
+                Toast.makeText(this, "Turn the switch on first", Toast.LENGTH_SHORT).show()
+            }
+        }
+        updateGeminiStatus()
+    }
+
+    private fun updateGeminiStatus() {
+        val last = prefs.geminiLastSignal.ifBlank { "none yet" }
+        findViewById<TextView>(R.id.tvGeminiStatus).text = if (prefs.geminiShortcut) {
+            "On. Last side-button signal: $last"
+        } else {
+            "Off. Gemini is blocked in the kiosk."
+        }
     }
 
     /** Lets the admin set the media volume even though students can't (restriction is lifted here). */
@@ -93,7 +125,10 @@ class AdminActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (::prefs.isInitialized) updateAdminStatus()
+        if (::prefs.isInitialized) {
+            updateAdminStatus()
+            updateGeminiStatus()
+        }
     }
 
     // ── Admin & exit ───────────────────────────────────────────────────

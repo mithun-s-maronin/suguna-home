@@ -38,7 +38,9 @@ jobs:
             SureMDM.apk
             SugunaAgent.apk
 
+      # Only main/master builds replace the "latest" release; other branches just upload artifacts.
       - name: Publish to "latest" release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest

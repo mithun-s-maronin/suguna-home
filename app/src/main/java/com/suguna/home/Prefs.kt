@@ -55,7 +55,19 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_PERM_LOCKED, false)
         set(value) = sp.edit().putBoolean(KEY_PERM_LOCKED, value).apply()
 
+    /** Holding the side button opens Gemini ("Ask about screen") inside the kiosk. Admin switch. */
+    var geminiShortcut: Boolean
+        get() = sp.getBoolean(KEY_GEMINI_SHORTCUT, true)
+        set(value) = sp.edit().putBoolean(KEY_GEMINI_SHORTCUT, value).apply()
+
+    /** Last side-button signal the app saw, e.g. "assistant · 9:41:05 PM" (shown in Admin). */
+    var geminiLastSignal: String
+        get() = sp.getString(KEY_GEMINI_LAST_SIGNAL, "") ?: ""
+        set(value) = sp.edit().putString(KEY_GEMINI_LAST_SIGNAL, value).apply()
+
     private companion object {
+        const val KEY_GEMINI_SHORTCUT = "gemini_shortcut"
+        const val KEY_GEMINI_LAST_SIGNAL = "gemini_last_signal"
         const val KEY_DEVICE_VERIFIED = "device_verified"
         const val KEY_PINNED_APPS = "pinned_apps"
         const val KEY_FOOTER_VERSION = "footer_version"

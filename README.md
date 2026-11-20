@@ -25,6 +25,17 @@ to a direct image link (or ask to bundle the image into the app).
 Long-press the footer ("Managed Device · v…") on the home screen to open the admin screen:
 pin which apps show on the home screen, set a wallpaper image, and edit the version number.
 
+## Gemini on the side button
+Holding the side (power) button opens Gemini with **Ask about screen**, even inside the kiosk.
+Admin → "Gemini on the side button" has the on/off switch, a **Test Gemini now** button, and the
+last side-button signal the app saw. Needs Gemini set as the default digital assistant app (with
+screen/screenshot access on) and a Google account signed in on the tablet.
+- Native: One UI's side button **Long press → Digital assistant** opens Gemini; while the switch is
+  on, the Google + Gemini apps are allowlisted in lock-task so it isn't blocked.
+- Fallback: if the system announces the long-press but Gemini doesn't appear, `GeminiAssistActivity`
+  (a see-through activity) calls `Activity.showAssist()` to open it with a screenshot of the app.
+  Apps that block screenshots stay hidden from Gemini.
+
 ## Wi-Fi panel
 The in-app Wi-Fi panel is recreated from the original (`WifiConnectActivity`). It needs the
 location permission to list networks (Android requirement). On Android 11+, tapping Connect
