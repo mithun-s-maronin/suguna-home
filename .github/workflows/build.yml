@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ '**' ]
   workflow_dispatch:
 
 permissions:
@@ -38,13 +38,15 @@ jobs:
             SureMDM.apk
             SugunaAgent.apk
 
-      # Only main/master builds replace the "latest" release; other branches just upload artifacts.
-      - name: Publish to "latest" release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      # main/master → the "latest" release. Any other branch → its own pre-release
+      # ("build-<branch>"), so testing a branch never replaces what's in "latest".
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest builds
+          tag_name: ${{ (github.ref_name == 'main' || github.ref_name == 'master') && 'latest' || format('build-{0}', github.ref_name) }}
+          name: ${{ (github.ref_name == 'main' || github.ref_name == 'master') && 'Latest builds' || format('Test build ({0})', github.ref_name) }}
+          prerelease: ${{ github.ref_name != 'main' && github.ref_name != 'master' }}
+          target_commitish: ${{ github.sha }}
           files: |
             SureMDM.apk
             SugunaAgent.apk
