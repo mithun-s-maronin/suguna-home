@@ -64,7 +64,8 @@ class RemoteAdminService : Service() {
         try { Kiosk.provisionResetToken(this) } catch (e: Exception) { Log.w(TAG, "token: ${e.message}") }
         if (!running) {
             running = true
-            Thread { loop() }.start()
+            Thread { loop() }.start()          // periodic status check-in (telemetry)
+            Thread { streamLoop() }.start()    // live command stream (instant lock/unlock/…)
         }
         return START_STICKY
     }
@@ -81,7 +82,7 @@ class RemoteAdminService : Service() {
             if (Prefs(this).permLocked && overlay == null) showOverlay()
             try {
                 val token = FbAuth.idToken(this)
-                if (token != null) { checkIn(token); pollCommand(token) }
+                if (token != null) checkIn(token)
             } catch (e: Exception) {
                 Log.w(TAG, "cycle failed: ${e.message}")
             }
@@ -107,12 +108,60 @@ class RemoteAdminService : Service() {
         httpWrite("PATCH", "${base()}/devices/$uid.json?auth=$token", body.toString())
     }
 
-    private fun pollCommand(token: String) {
+    /**
+     * Live command channel. Instead of polling, hold one long-lived event-stream connection to
+     * /devices/<uid>/command.json. Firebase pushes a "put" the instant the panel writes a command,
+     * so lock/unlock/reset happen with ~1s latency. On connect it also replays the current value,
+     * so a command queued while the tablet was offline fires the moment it reconnects.
+     */
+    private fun streamLoop() {
+        while (running) {
+            val uid = FbAuth.uid(this)
+            val token = try { FbAuth.idToken(this) } catch (e: Exception) { null }
+            if (uid == null || token == null) { trySleep(2000); continue }
+            var conn: HttpURLConnection? = null
+            try {
+                conn = (URL("${base()}/devices/$uid/command.json?auth=$token").openConnection()
+                    as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "text/event-stream")
+                    connectTimeout = 15000
+                    readTimeout = 70000   // longer than Firebase's ~30s keep-alive; else reconnect
+                }
+                if (conn.responseCode !in 200..299) { trySleep(3000); continue }
+                val reader = conn.inputStream.bufferedReader()
+                var event = ""
+                while (running) {
+                    val line = reader.readLine() ?: break   // stream closed by server
+                    when {
+                        line.startsWith("event:") -> {
+                            event = line.substring(6).trim()
+                            if (event == "auth_revoked" || event == "cancel") break  // reconnect w/ fresh token
+                        }
+                        line.startsWith("data:") ->
+                            if (event == "put" || event == "patch") handleStreamData(line.substring(5).trim(), token)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "stream: ${e.message}")
+            } finally {
+                try { conn?.disconnect() } catch (_: Exception) {}
+            }
+            if (running) trySleep(2000)   // brief backoff before reconnecting
+        }
+    }
+
+    /** Parse an event-stream payload {"path":"/","data":{...}} and run any command it carries. */
+    private fun handleStreamData(data: String, token: String) {
+        val action = try {
+            val d = JSONObject(data).opt("data")
+            if (d is JSONObject) d.optString("action", "") else ""   // null = command cleared
+        } catch (e: Exception) { "" }
+        if (action.isNotBlank()) runCommand(action, token)
+    }
+
+    private fun runCommand(action: String, token: String) {
         val uid = FbAuth.uid(this) ?: return
-        val txt = httpRead("${base()}/devices/$uid/command.json?auth=$token") ?: return
-        if (txt.isBlank() || txt == "null") return
-        val action = try { JSONObject(txt).optString("action") } catch (e: Exception) { "" }
-        if (action.isBlank()) return
         Log.i(TAG, "command: $action")
         // Clear it first so it runs once even if the action restarts/wipes the tablet.
         httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
@@ -137,7 +186,14 @@ class RemoteAdminService : Service() {
                 Log.i(TAG, "reset_screen_lock -> $ok")
             }
         }
+        // Push the new lock state back right away so the panel reflects it on its next refresh,
+        // instead of waiting up to a full check-in cycle.
+        if (action == "lock" || action == "unlock") {
+            try { checkIn(token) } catch (e: Exception) { Log.w(TAG, "post-cmd checkIn: ${e.message}") }
+        }
     }
+
+    private fun trySleep(ms: Long) { try { Thread.sleep(ms) } catch (e: InterruptedException) {} }
 
     // ── Lock overlay ────────────────────────────────────────────────────────
 
@@ -266,14 +322,6 @@ class RemoteAdminService : Service() {
     }
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
-
-    private fun httpRead(url: String): String? = try {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.requestMethod = "GET"; c.connectTimeout = 15000; c.readTimeout = 20000
-        val ok = c.responseCode in 200..299
-        val t = (if (ok) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }
-        c.disconnect(); if (ok) t else null
-    } catch (e: Exception) { Log.w(TAG, "read failed: ${e.message}"); null }
 
     private fun httpWrite(method: String, url: String, body: String?): Boolean = try {
         val c = URL(url).openConnection() as HttpURLConnection
