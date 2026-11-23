@@ -28,6 +28,8 @@ class PermissionGateActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Device Owner can grant location with no prompt — do it up front.
         Kiosk.grantSelfLocation(this)
+        // Let Settings open under the kiosk while this gate is up, else grants bounce back.
+        Kiosk.allowSettingsInLockTask(this, true)
 
         val scroll = ScrollView(this).apply { setBackgroundColor(Color.parseColor("#0D1B2A")) }
         root = LinearLayout(this).apply {
@@ -42,9 +44,20 @@ class PermissionGateActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Kiosk.allowSettingsInLockTask(this, true)
         if (Perms.allGranted(this)) { finish(); return }
         build()
     }
+
+    override fun onDestroy() {
+        // Restore the normal kiosk allowlist (the home screen also does this via applyKiosk).
+        try { Kiosk.allowSettingsInLockTask(this, false) } catch (e: Exception) {}
+        super.onDestroy()
+    }
+
+    // Back always escapes to the home screen — this screen can never trap you.
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() { finish() }
 
     private fun build() {
         root.removeAllViews()

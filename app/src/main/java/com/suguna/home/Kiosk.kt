@@ -228,6 +228,30 @@ object Kiosk {
     fun isHomeHandled(context: Context): Boolean =
         isDeviceOwner(context) || SetupPermissions.isDefaultHome(context)
 
+    /**
+     * Temporarily let the Settings app (and the permission UI) run under lock-task, so the
+     * one-time permission gate can open the usage-access / overlay screens. Without this,
+     * lock-task blocks Settings and the grant screen bounces straight back to the MDM.
+     * Called with allow=true while the gate is open and allow=false when it closes; the normal
+     * applyKiosk() on the home screen also resets the allowlist.
+     */
+    fun allowSettingsInLockTask(context: Context, allow: Boolean) {
+        if (!isDeviceOwner(context)) return
+        val dpm = dpm(context)
+        val admin = MdmDeviceAdminReceiver.component(context)
+        val set = linkedSetOf(context.packageName)
+        set.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+        set.addAll(Prefs(context).pinnedApps)
+        set.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)
+        if (allow) {
+            set.add("com.android.settings")
+            set.add("com.android.permissioncontroller")
+            set.add("com.google.android.permissioncontroller")
+        }
+        try { dpm.setLockTaskPackages(admin, set.toTypedArray()) }
+        catch (e: Exception) { Log.w(TAG, "allowSettingsInLockTask: ${e.message}") }
+    }
+
     /** As Device Owner, silently grant ourselves location (a runtime permission) — no prompt. */
     fun grantSelfLocation(context: Context) {
         if (!isDeviceOwner(context)) return
