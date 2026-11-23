@@ -102,6 +102,12 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- One-time gate for the new permissions after a v36 update -->
+        <activity
+            android:name=".PermissionGateActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MdmLauncher" />
+
         <!-- Receives the result of silent app installs -->
         <receiver
             android:name=".InstallResultReceiver"

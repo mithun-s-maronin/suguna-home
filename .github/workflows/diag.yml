@@ -18,18 +18,18 @@ jobs:
             -H "Content-Type: application/json" -d '{"returnSecureToken":true}')
           echo "$SIGN" | head -c 300; echo
           TOKEN=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))")
-          UID=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('localId',''))")
-          echo "signed in? token=${TOKEN:+YES} uid=$UID"
+          DUID=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('localId',''))")
+          echo "signed in? token=${TOKEN:+YES} uid=$DUID"
           [ -z "$TOKEN" ] && { echo "SIGN-IN FAILED — anonymous auth not working"; exit 0; }
 
           echo "=== 2. write own device record (the check-in) ==="
-          W=$(curl -s -o /tmp/w.txt -w "%{http_code}" -X PATCH "$DB/devices/$UID.json?auth=$TOKEN" \
+          W=$(curl -s -o /tmp/w.txt -w "%{http_code}" -X PATCH "$DB/devices/$DUID.json?auth=$TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"name\":\"DIAG_TEST\",\"enrollment\":\"000\",\"battery\":55,\"lastSeen\":$(date +%s)000}")
           echo "write HTTP: $W"; echo "response: $(cat /tmp/w.txt | head -c 300)"
 
           echo "=== 3. read own record back ==="
-          R=$(curl -s -o /tmp/r.txt -w "%{http_code}" "$DB/devices/$UID.json?auth=$TOKEN")
+          R=$(curl -s -o /tmp/r.txt -w "%{http_code}" "$DB/devices/$DUID.json?auth=$TOKEN")
           echo "read-own HTTP: $R"; echo "response: $(cat /tmp/r.txt | head -c 300)"
 
           echo "=== 4. anonymous tries to LIST all devices (should be DENIED if rules are right) ==="

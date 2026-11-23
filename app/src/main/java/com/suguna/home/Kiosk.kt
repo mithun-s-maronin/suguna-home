@@ -228,6 +228,24 @@ object Kiosk {
     fun isHomeHandled(context: Context): Boolean =
         isDeviceOwner(context) || SetupPermissions.isDefaultHome(context)
 
+    /** As Device Owner, silently grant ourselves location (a runtime permission) — no prompt. */
+    fun grantSelfLocation(context: Context) {
+        if (!isDeviceOwner(context)) return
+        val dpm = dpm(context)
+        val admin = MdmDeviceAdminReceiver.component(context)
+        for (perm in arrayOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        )) {
+            try {
+                dpm.setPermissionGrantState(
+                    admin, context.packageName, perm,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED,
+                )
+            } catch (e: Exception) { Log.w(TAG, "grant $perm: ${e.message}") }
+        }
+    }
+
     // ── Remote reset of the student's screen lock ──────────────────────────
 
     /**
