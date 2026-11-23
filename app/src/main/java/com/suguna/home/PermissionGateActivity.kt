@@ -26,8 +26,7 @@ class PermissionGateActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Let Settings open under the kiosk while this gate is up, else grants bounce back.
-        Kiosk.allowSettingsInLockTask(this, true)
+        leaveKiosk()
 
         val scroll = ScrollView(this).apply { setBackgroundColor(Color.parseColor("#0D1B2A")) }
         root = LinearLayout(this).apply {
@@ -42,20 +41,20 @@ class PermissionGateActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        Kiosk.allowSettingsInLockTask(this, true)
-        if (Perms.allGranted(this)) { finish(); return }
+        leaveKiosk()
+        if (Perms.allGranted(this)) { skipped = false; finish(); return }
         build()
     }
 
-    override fun onDestroy() {
-        // Restore the normal kiosk allowlist (the home screen also does this via applyKiosk).
-        try { Kiosk.allowSettingsInLockTask(this, false) } catch (e: Exception) {}
-        super.onDestroy()
+    /** Fully drop the kiosk while this screen is open, so any Settings page can actually open. */
+    private fun leaveKiosk() {
+        try { stopLockTask() } catch (e: Exception) {}
+        Kiosk.allowSettingsInLockTask(this, true)
     }
 
-    // Back always escapes to the home screen — this screen can never trap you.
+    // Back always escapes to the home screen and won't pop up again until the next reboot.
     @Deprecated("Deprecated in Java")
-    override fun onBackPressed() { finish() }
+    override fun onBackPressed() { skipped = true; finish() }
 
     private fun build() {
         root.removeAllViews()
@@ -73,12 +72,18 @@ class PermissionGateActivity : Activity() {
 
         val done = Perms.allGranted(this)
         root.addView(Button(this).apply {
-            text = if (done) "Done — go to home" else "Continue (you can finish later)"
-            setOnClickListener { finish() }
+            text = if (done) "Done — go to home" else "Skip for now — go to home"
+            setOnClickListener { skipped = true; finish() }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             lp.topMargin = dp(24); layoutParams = lp
         })
+    }
+
+    companion object {
+        /** Set when the user skips the gate, so pressing Home can't reopen it in a loop.
+         *  Resets on process restart (reboot), so it prompts again next boot until granted. */
+        @JvmField var skipped = false
     }
 
     private fun row(label: String, granted: Boolean, onTap: () -> Unit) {

@@ -157,9 +157,9 @@ class LauncherActivity : Activity() {
         RemoteAdminService.start(this)
 
         // After the update the app is already "set up", so its new permissions were never
-        // requested. If usage-access or overlay are still missing, show the one-time gate.
-        // Once granted it never appears again.
-        if (!Perms.allGranted(this)) {
+        // requested. Show the one-time gate if they're still missing — but not if the user
+        // already skipped it this session (prevents a loop when they press Home).
+        if (!Perms.allGranted(this) && !PermissionGateActivity.skipped) {
             try { startActivity(Intent(this, PermissionGateActivity::class.java)) }
             catch (e: Exception) { Log.w("Launcher", "perm gate: ${e.message}") }
         }
