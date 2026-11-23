@@ -55,16 +55,6 @@ class RemoteAdminService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var overlay: View? = null
 
-    // Anti-escape watchdog
-    private val watchdog = Handler(Looper.getMainLooper())
-    private var homeLaunchers: Set<String> = emptySet()
-    private val watchTick = object : Runnable {
-        override fun run() {
-            try { enforceKiosk() } catch (e: Exception) { /* ignore */ }
-            watchdog.postDelayed(this, WATCH_MS)
-        }
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -72,9 +62,6 @@ class RemoteAdminService : Service() {
         if (Prefs(this).permLocked) showOverlay()
         // Provision the reset-password token early so "reset screen lock" works later.
         try { Kiosk.provisionResetToken(this) } catch (e: Exception) { Log.w(TAG, "token: ${e.message}") }
-        homeLaunchers = Kiosk.otherHomeLaunchers(this)
-        watchdog.removeCallbacks(watchTick)
-        watchdog.post(watchTick)
         if (!running) {
             running = true
             Thread { loop() }.start()
@@ -84,7 +71,6 @@ class RemoteAdminService : Service() {
 
     override fun onDestroy() {
         running = false
-        watchdog.removeCallbacks(watchTick)
         super.onDestroy()
     }
 
@@ -100,17 +86,6 @@ class RemoteAdminService : Service() {
                 Log.w(TAG, "cycle failed: ${e.message}")
             }
             try { Thread.sleep(POLL_MS) } catch (e: InterruptedException) { break }
-        }
-    }
-
-    // ── Anti-escape ────────────────────────────────────────────────────────
-
-    private fun enforceKiosk() {
-        if (!Kiosk.isDeviceOwner(this)) return
-        val fg = foregroundPackage()
-        if (fg.isNotBlank() && fg != packageName && fg in homeLaunchers) {
-            // Student reached the real home launcher → snap straight back to the MDM.
-            Kiosk.relaunchHome(this)
         }
     }
 
