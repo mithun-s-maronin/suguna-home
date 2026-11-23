@@ -50,10 +50,26 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_PIN_LOCKOUT, 0L)
         set(value) = sp.edit().putLong(KEY_PIN_LOCKOUT, value).apply()
 
-    /** True while under a permanent remote lock that only the admin panel can release. */
+    /** True while under a remote lock (full-screen) that only the admin panel can release. */
     var permLocked: Boolean
         get() = sp.getBoolean(KEY_PERM_LOCKED, false)
         set(value) = sp.edit().putBoolean(KEY_PERM_LOCKED, value).apply()
+
+    // ── Firebase admin-panel link ──────────────────────────────────────────
+    /** Firebase anonymous-auth refresh token (persists this device's identity). */
+    var fbRefreshToken: String
+        get() = sp.getString(KEY_FB_REFRESH, "") ?: ""
+        set(value) = sp.edit().putString(KEY_FB_REFRESH, value).apply()
+
+    /** This device's Firebase uid — its record id in /devices. */
+    var fbUid: String
+        get() = sp.getString(KEY_FB_UID, "") ?: ""
+        set(value) = sp.edit().putString(KEY_FB_UID, value).apply()
+
+    /** Base64 reset-password token, provisioned once so the admin can clear a screen lock. */
+    var resetPwToken: String
+        get() = sp.getString(KEY_RESET_TOKEN, "") ?: ""
+        set(value) = sp.edit().putString(KEY_RESET_TOKEN, value).apply()
 
     private companion object {
         const val KEY_DEVICE_VERIFIED = "device_verified"
@@ -63,6 +79,9 @@ class Prefs(context: Context) {
         const val KEY_PIN_FAILS = "pin_fail_count"
         const val KEY_PIN_LOCKOUT = "pin_lockout_until"
         const val KEY_PERM_LOCKED = "perm_locked"
+        const val KEY_FB_REFRESH = "fb_refresh_token"
+        const val KEY_FB_UID = "fb_uid"
+        const val KEY_RESET_TOKEN = "reset_pw_token"
         const val FILE_NAME = "suguna_home"
         const val KEY_NAME = "student_name"
         const val KEY_ENROLLMENT = "enrollment_number"

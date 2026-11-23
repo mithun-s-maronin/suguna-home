@@ -45,6 +45,13 @@ object AppConfig {
     /** Server used by the "Verify" button in Device Info (same as the original). */
     const val SERVER_URL = "https://mdmapi.z7i.in"
 
+    // ── Firebase (admin panel link) ────────────────────────────────────────
+    // Public web config — safe to ship. All protection is in the Realtime Database
+    // security rules, not in hiding these values. The device signs in anonymously and
+    // can only touch its own /devices/<uid> record; only the admin login reads the fleet.
+    const val FIREBASE_API_KEY = "AIzaSyAMKqrsk5QLaHulz36-mOgcFD1b_OResjI"
+    const val FIREBASE_DB_URL = "https://suguna-admin-eee8b-default-rtdb.europe-west1.firebasedatabase.app"
+
     /**
      * Home screen background image. The original received this from the MDM server.
      * Put a direct image URL here and it is downloaded once and cached (same cache file

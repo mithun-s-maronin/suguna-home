@@ -228,6 +228,72 @@ object Kiosk {
     fun isHomeHandled(context: Context): Boolean =
         isDeviceOwner(context) || SetupPermissions.isDefaultHome(context)
 
+    // ── Remote reset of the student's screen lock ──────────────────────────
+
+    /**
+     * Provision a reset-password token once, so the admin panel can later clear a forgotten
+     * screen lock. On a kiosk tablet with no secure lock at this moment the token is active
+     * immediately and keeps working even after a student adds a PIN. Safe to call repeatedly.
+     */
+    fun provisionResetToken(context: Context) {
+        if (!isDeviceOwner(context)) return
+        val prefs = Prefs(context)
+        if (prefs.resetPwToken.isNotBlank()) return
+        try {
+            val token = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+            val ok = dpm(context).setResetPasswordToken(
+                MdmDeviceAdminReceiver.component(context), token,
+            )
+            if (ok) {
+                prefs.resetPwToken =
+                    android.util.Base64.encodeToString(token, android.util.Base64.NO_WRAP)
+                Log.i(TAG, "reset-password token provisioned")
+            } else {
+                Log.w(TAG, "setResetPasswordToken returned false")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "provisionResetToken failed: ${e.message}")
+        }
+    }
+
+    /** Clear the device's screen lock (empty password) using the provisioned token. */
+    fun resetScreenLock(context: Context): Boolean {
+        if (!isDeviceOwner(context)) return false
+        val tokenB64 = Prefs(context).resetPwToken
+        if (tokenB64.isBlank()) { Log.w(TAG, "no reset token provisioned"); return false }
+        return try {
+            val token = android.util.Base64.decode(tokenB64, android.util.Base64.NO_WRAP)
+            dpm(context).resetPasswordWithToken(
+                MdmDeviceAdminReceiver.component(context), "", token, 0,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "resetScreenLock failed: ${e.message}"); false
+        }
+    }
+
+    // ── Anti-escape watchdog support ───────────────────────────────────────
+
+    /** Packages that register as a HOME launcher, excluding ours — i.e. "the real home screen". */
+    fun otherHomeLaunchers(context: Context): Set<String> = try {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        context.packageManager.queryIntentActivities(intent, 0)
+            .mapNotNull { it.activityInfo?.packageName }
+            .filter { it != context.packageName }
+            .toSet()
+    } catch (e: Exception) { emptySet() }
+
+    /** Bring the MDM home back to the front (used when a student slips out to the real home). */
+    fun relaunchHome(context: Context) {
+        try {
+            context.startActivity(
+                Intent(context, LauncherActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "relaunchHome failed: ${e.message}")
+        }
+    }
+
     /** Leave the MDM: end lock-task and hand the home screen back to the stock (One UI) launcher. */
     fun exitToSystemLauncher(activity: Activity) {
         if (isDeviceOwner(activity)) {

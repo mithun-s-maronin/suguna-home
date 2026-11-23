@@ -31,20 +31,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Remote-admin agent (merged into the fork for v35). Runs as a foreground service and every
- * POLL_MS:
- *   1. writes this device's status to /devices/<id>  — name, enrollment, model, battery,
- *      GPS location, current foreground app, lock state, lastSeen
- *   2. reads /devices/<id>/command and, if present, executes it and deletes it.
+ * Remote-admin link to the Suguna Admin panel (built into the MDM for v36). Runs as a foreground
+ * service. Every POLL_MS it:
+ *   1. signs in anonymously if needed (FbAuth) and writes this tablet's status to /devices/<uid>
+ *      — name, enrollment, model, battery, GPS, current app, lock state, lastSeen
+ *   2. reads /devices/<uid>/command and, if one is waiting, runs it and clears it.
  *
- * Commands (sent by the Suguna Admin app):
- *   "lock"           -> lock the screen now (student can unlock normally)
- *   "lock_permanent" -> full-screen overlay + lock, re-asserted until "unlock"
- *   "unlock"         -> release the permanent lock
- *   "factory_reset"  -> wipe the device (reuses Kiosk.factoryReset)
+ * Commands from the panel:
+ *   "lock"              -> full-screen lockdown, only the panel's "unlock" releases it
+ *   "unlock"            -> release the lock
+ *   "factory_reset"     -> wipe the tablet (Device Owner)
+ *   "reset_screen_lock" -> clear a forgotten screen PIN (Device Owner, via a provisioned token)
  *
- * Firebase Realtime Database over REST — no Firebase SDK. The DB URL + secret come from
- * BuildConfig (injected at build time), so the secret never lives in the source.
+ * A lightweight watchdog also snaps the tablet back to the MDM if a student slips out to the
+ * real home screen.
+ *
+ * Auth is Firebase Anonymous Auth over REST (no SDK, no secret) — see FbAuth. Only the public
+ * API key ships; the Realtime Database rules keep each tablet to its own record.
  */
 class RemoteAdminService : Service() {
 
@@ -52,15 +55,26 @@ class RemoteAdminService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var overlay: View? = null
 
+    // Anti-escape watchdog
+    private val watchdog = Handler(Looper.getMainLooper())
+    private var homeLaunchers: Set<String> = emptySet()
+    private val watchTick = object : Runnable {
+        override fun run() {
+            try { enforceKiosk() } catch (e: Exception) { /* ignore */ }
+            watchdog.postDelayed(this, WATCH_MS)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification())
         if (Prefs(this).permLocked) showOverlay()
-        if (BuildConfig.FIREBASE_DB_URL.isBlank() || BuildConfig.FIREBASE_DB_SECRET.isBlank()) {
-            Log.w(TAG, "No Firebase config baked in; agent idle.")
-            return START_STICKY
-        }
+        // Provision the reset-password token early so "reset screen lock" works later.
+        try { Kiosk.provisionResetToken(this) } catch (e: Exception) { Log.w(TAG, "token: ${e.message}") }
+        homeLaunchers = Kiosk.otherHomeLaunchers(this)
+        watchdog.removeCallbacks(watchTick)
+        watchdog.post(watchTick)
         if (!running) {
             running = true
             Thread { loop() }.start()
@@ -70,18 +84,18 @@ class RemoteAdminService : Service() {
 
     override fun onDestroy() {
         running = false
+        watchdog.removeCallbacks(watchTick)
         super.onDestroy()
     }
 
-    private fun base() = BuildConfig.FIREBASE_DB_URL.trimEnd('/')
-    private fun secret() = BuildConfig.FIREBASE_DB_SECRET
+    private fun base() = AppConfig.FIREBASE_DB_URL.trimEnd('/')
 
     private fun loop() {
         while (running) {
             if (Prefs(this).permLocked && overlay == null) showOverlay()
             try {
-                checkIn()
-                pollCommand()
+                val token = FbAuth.idToken(this)
+                if (token != null) { checkIn(token); pollCommand(token) }
             } catch (e: Exception) {
                 Log.w(TAG, "cycle failed: ${e.message}")
             }
@@ -89,19 +103,31 @@ class RemoteAdminService : Service() {
         }
     }
 
-    private fun deviceId(): String =
-        Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+    // ── Anti-escape ────────────────────────────────────────────────────────
 
-    private fun checkIn() {
+    private fun enforceKiosk() {
+        if (!Kiosk.isDeviceOwner(this)) return
+        val fg = foregroundPackage()
+        if (fg.isNotBlank() && fg != packageName && fg in homeLaunchers) {
+            // Student reached the real home launcher → snap straight back to the MDM.
+            Kiosk.relaunchHome(this)
+        }
+    }
+
+    // ── Check-in + commands ─────────────────────────────────────────────────
+
+    private fun checkIn(token: String) {
+        val uid = FbAuth.uid(this) ?: return
         val prefs = Prefs(this)
         val body = JSONObject()
             .put("name", prefs.studentName)
             .put("enrollment", prefs.enrollmentNumber)
             .put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
             .put("appVersion", appVersion())
+            .put("androidId", Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID))
             .put("battery", batteryPct())
             .put("currentApp", foregroundApp())
-            .put("lockState", if (prefs.permLocked) "permanent" else "none")
+            .put("lockState", if (prefs.permLocked) "locked" else "none")
             .put("lastSeen", System.currentTimeMillis())
         val loc = lastLocation()
         if (loc != null) {
@@ -110,48 +136,42 @@ class RemoteAdminService : Service() {
             body.put("locAccuracy", loc.accuracy.toInt())
             body.put("locTime", loc.time)
         }
-        httpWrite("PATCH", "${base()}/devices/${deviceId()}.json?auth=${secret()}", body.toString())
+        httpWrite("PATCH", "${base()}/devices/$uid.json?auth=$token", body.toString())
     }
 
-    private fun pollCommand() {
-        val txt = httpRead("${base()}/devices/${deviceId()}/command.json?auth=${secret()}") ?: return
+    private fun pollCommand(token: String) {
+        val uid = FbAuth.uid(this) ?: return
+        val txt = httpRead("${base()}/devices/$uid/command.json?auth=$token") ?: return
         if (txt.isBlank() || txt == "null") return
         val action = try { JSONObject(txt).optString("action") } catch (e: Exception) { "" }
         if (action.isBlank()) return
         Log.i(TAG, "command: $action")
-        // Clear it first so it runs once even if the action restarts/wipes the device.
-        httpWrite("DELETE", "${base()}/devices/${deviceId()}/command.json?auth=${secret()}", null)
+        // Clear it first so it runs once even if the action restarts/wipes the tablet.
+        httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
         when (action) {
-            "lock" -> lockNow()
-            "lock_permanent" -> {
+            "lock" -> {
                 Prefs(this).permLocked = true
                 showOverlay()
-                lockNow()
             }
             "unlock" -> {
                 Prefs(this).permLocked = false
                 hideOverlay()
             }
             "factory_reset" -> Kiosk.factoryReset(this)
+            "reset_screen_lock" -> {
+                val ok = Kiosk.resetScreenLock(this)
+                Log.i(TAG, "reset_screen_lock -> $ok")
+            }
         }
     }
 
-    private fun lockNow() {
-        try {
-            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-            dpm.lockNow()
-        } catch (e: Exception) {
-            Log.w(TAG, "lockNow failed: ${e.message}")
-        }
-    }
-
-    // ---- Permanent-lock overlay --------------------------------------------------------------
+    // ── Lock overlay ────────────────────────────────────────────────────────
 
     private fun showOverlay() {
         main.post {
             if (overlay != null) return@post
             if (!Settings.canDrawOverlays(this)) {
-                Log.w(TAG, "overlay permission not granted; permanent lock cannot cover the screen")
+                Log.w(TAG, "overlay permission not granted; lock cannot cover the screen")
                 return@post
             }
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -174,7 +194,7 @@ class RemoteAdminService : Service() {
                     setPadding(0, 32, 0, 0)
                 })
                 addView(TextView(this@RemoteAdminService).apply {
-                    text = "This device has been locked by the administrator.\nIt will be unlocked remotely."
+                    text = "This tablet has been locked by the administrator.\nIt will be unlocked remotely."
                     setTextColor(Color.parseColor("#9FB3C8"))
                     textSize = 15f
                     gravity = Gravity.CENTER
@@ -209,7 +229,7 @@ class RemoteAdminService : Service() {
         }
     }
 
-    // ---- Telemetry helpers -------------------------------------------------------------------
+    // ── Telemetry helpers ────────────────────────────────────────────────────
 
     @SuppressLint("MissingPermission")
     private fun lastLocation(): Location? {
@@ -236,20 +256,25 @@ class RemoteAdminService : Service() {
         ) == AppOpsManager.MODE_ALLOWED
     } catch (e: Exception) { false }
 
-    private fun foregroundApp(): String {
+    private fun foregroundPackage(): String {
         if (!usageAccessGranted()) return ""
         return try {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val now = System.currentTimeMillis()
-            val events = usm.queryEvents(now - 60_000, now)
+            val events = usm.queryEvents(now - 10_000, now)
             val e = UsageEvents.Event()
             var pkg = ""
             while (events.hasNextEvent()) {
                 events.getNextEvent(e)
                 if (e.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND) pkg = e.packageName
             }
-            if (pkg.isBlank()) "" else appLabel(pkg)
-        } catch (e: Exception) { Log.w(TAG, "fg: ${e.message}"); "" }
+            pkg
+        } catch (e: Exception) { "" }
+    }
+
+    private fun foregroundApp(): String {
+        val pkg = foregroundPackage()
+        return if (pkg.isBlank()) "" else appLabel(pkg)
     }
 
     private fun appLabel(pkg: String): String = try {
@@ -284,6 +309,8 @@ class RemoteAdminService : Service() {
             .build()
     }
 
+    // ── HTTP ─────────────────────────────────────────────────────────────────
+
     private fun httpRead(url: String): String? = try {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = "GET"; c.connectTimeout = 15000; c.readTimeout = 20000
@@ -308,9 +335,10 @@ class RemoteAdminService : Service() {
         private const val TAG = "RemoteAdmin"
         private const val CHANNEL = "device_mgmt"
         private const val NOTIF_ID = 42
-        private const val POLL_MS = 45_000L
+        private const val POLL_MS = 30_000L
+        private const val WATCH_MS = 2_000L
 
-        /** Start the agent (from LauncherActivity and on boot). */
+        /** Start the link service (from LauncherActivity and on boot). */
         fun start(context: Context) {
             val i = Intent(context, RemoteAdminService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(i)
