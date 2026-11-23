@@ -119,12 +119,13 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
-        <!-- Restart the remote-admin agent after a reboot -->
+        <!-- Restart the remote-admin agent after a reboot or after the app updates itself -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

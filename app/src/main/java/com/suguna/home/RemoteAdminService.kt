@@ -142,10 +142,11 @@ class RemoteAdminService : Service() {
                             if (event == "put" || event == "patch") handleStreamData(line.substring(5).trim(), token)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Never let the command stream kill the process — that would also stop check-in.
                 Log.w(TAG, "stream: ${e.message}")
             } finally {
-                try { conn?.disconnect() } catch (_: Exception) {}
+                try { conn?.disconnect() } catch (_: Throwable) {}
             }
             if (running) trySleep(2000)   // brief backoff before reconnecting
         }
