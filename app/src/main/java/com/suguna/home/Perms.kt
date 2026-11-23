@@ -21,6 +21,6 @@ object Perms {
 
     fun hasOverlay(c: Context): Boolean = Settings.canDrawOverlays(c)
 
-    /** True only once every new permission is in place (used to decide whether to show the gate). */
-    fun allGranted(c: Context): Boolean = hasLocation(c) && hasUsageAccess(c) && hasOverlay(c)
+    /** True once the gate's permissions are in place (usage access for current-app, overlay for lock). */
+    fun allGranted(c: Context): Boolean = hasUsageAccess(c) && hasOverlay(c)
 }

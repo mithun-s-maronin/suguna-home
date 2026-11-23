@@ -129,13 +129,6 @@ class RemoteAdminService : Service() {
             .put("currentApp", foregroundApp())
             .put("lockState", if (prefs.permLocked) "locked" else "none")
             .put("lastSeen", System.currentTimeMillis())
-        val loc = lastLocation()
-        if (loc != null) {
-            body.put("lat", loc.latitude)
-            body.put("lng", loc.longitude)
-            body.put("locAccuracy", loc.accuracy.toInt())
-            body.put("locTime", loc.time)
-        }
         httpWrite("PATCH", "${base()}/devices/$uid.json?auth=$token", body.toString())
     }
 
@@ -230,24 +223,6 @@ class RemoteAdminService : Service() {
     }
 
     // ── Telemetry helpers ────────────────────────────────────────────────────
-
-    @SuppressLint("MissingPermission")
-    private fun lastLocation(): Location? {
-        val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        val coarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
-        if (!fine && !coarse) return null
-        return try {
-            val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            var best: Location? = null
-            for (p in lm.getProviders(true)) {
-                val l = lm.getLastKnownLocation(p) ?: continue
-                if (best == null || l.time > best!!.time) best = l
-            }
-            best
-        } catch (e: Exception) { Log.w(TAG, "loc: ${e.message}"); null }
-    }
 
     private fun usageAccessGranted(): Boolean = try {
         val ops = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager

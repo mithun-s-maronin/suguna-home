@@ -26,8 +26,6 @@ class PermissionGateActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Device Owner can grant location with no prompt — do it up front.
-        Kiosk.grantSelfLocation(this)
         // Let Settings open under the kiosk while this gate is up, else grants bounce back.
         Kiosk.allowSettingsInLockTask(this, true)
 
@@ -62,17 +60,9 @@ class PermissionGateActivity : Activity() {
     private fun build() {
         root.removeAllViews()
         root.addView(title("Finish setup"))
-        root.addView(sub("This update added a few features. Grant these so the admin panel gets " +
-            "location, the current app, and remote lock. You'll only do this once."))
+        root.addView(sub("This update added a couple of features. Grant these so the admin panel " +
+            "sees the current app and can lock the tablet. You'll only do this once."))
 
-        row("Location (GPS)", Perms.hasLocation(this)) {
-            requestPermissions(
-                arrayOf(
-                    android.Manifest.permission.ACCESS_FINE_LOCATION,
-                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
-                ), 1,
-            )
-        }
         row("Usage access (current app)", Perms.hasUsageAccess(this)) {
             toast("Find \"Sure MDM\" in the list and turn it on")
             open(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))

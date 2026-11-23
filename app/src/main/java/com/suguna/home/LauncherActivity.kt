@@ -156,10 +156,9 @@ class LauncherActivity : Activity() {
         // Start the remote-admin agent: reports status to Firebase and runs lock / factory-reset.
         RemoteAdminService.start(this)
 
-        // After a v36 update the app is already "set up", so its new permissions were never
-        // requested. Grant location silently (Device Owner) and, if usage-access or overlay are
-        // still missing, show the one-time gate. Once granted it never appears again.
-        Kiosk.grantSelfLocation(this)
+        // After the update the app is already "set up", so its new permissions were never
+        // requested. If usage-access or overlay are still missing, show the one-time gate.
+        // Once granted it never appears again.
         if (!Perms.allGranted(this)) {
             try { startActivity(Intent(this, PermissionGateActivity::class.java)) }
             catch (e: Exception) { Log.w("Launcher", "perm gate: ${e.message}") }
