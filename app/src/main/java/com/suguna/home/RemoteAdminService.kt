@@ -119,11 +119,17 @@ class RemoteAdminService : Service() {
         when (action) {
             "lock" -> {
                 Prefs(this).permLocked = true
+                // Pin to the MDM alone and snap to the home screen (kicks the student out of any
+                // app they're in), then cover it with the locked screen.
+                try { Kiosk.lockToMdm(this) } catch (e: Exception) { Log.w(TAG, "lockToMdm: ${e.message}") }
                 showOverlay()
             }
             "unlock" -> {
                 Prefs(this).permLocked = false
                 hideOverlay()
+                // Restore the normal allowlist (student apps + store) by re-applying the kiosk on
+                // the home screen.
+                try { Kiosk.relaunchHome(this) } catch (e: Exception) { Log.w(TAG, "relaunchHome: ${e.message}") }
             }
             "factory_reset" -> Kiosk.factoryReset(this)
             "reset_screen_lock" -> {

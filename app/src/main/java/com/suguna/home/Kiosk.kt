@@ -52,10 +52,14 @@ object Kiosk {
         try {
             // Allowlist the launcher AND the apps on the home screen, otherwise lock-task blocks
             // them from opening. Without this the three student apps can't be launched.
+            // When the admin has LOCKED the device, pin to the MDM alone — no student apps, no
+            // store — so the device is stuck on this home screen until the panel unlocks it.
             val allow = linkedSetOf(activity.packageName)
-            allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
-            allow.addAll(Prefs(activity).pinnedApps)
-            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
+            if (!Prefs(activity).permLocked) {
+                allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+                allow.addAll(Prefs(activity).pinnedApps)
+                allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
+            }
             dpm.setLockTaskPackages(admin, allow.toTypedArray())
         } catch (e: Exception) {
             Log.w(TAG, "setLockTaskPackages failed: ${e.message}")
@@ -323,6 +327,23 @@ object Kiosk {
             .filter { it != context.packageName }
             .toSet()
     } catch (e: Exception) { emptySet() }
+
+    /**
+     * Admin "lock" command: pin the device to the MDM alone and snap it to the home screen.
+     * Pulling the student apps out of the lock-task allowlist also kicks them out of any app they're
+     * currently inside, back to the MDM. The launcher's applyKiosk() keeps it this way (permLocked).
+     */
+    fun lockToMdm(context: Context) {
+        if (isDeviceOwner(context)) {
+            try {
+                dpm(context).setLockTaskPackages(
+                    MdmDeviceAdminReceiver.component(context),
+                    arrayOf(context.packageName),
+                )
+            } catch (e: Exception) { Log.w(TAG, "lockToMdm packages: ${e.message}") }
+        }
+        relaunchHome(context)
+    }
 
     /** Bring the MDM home back to the front (used when a student slips out to the real home). */
     fun relaunchHome(context: Context) {

@@ -183,6 +183,9 @@ class LauncherActivity : Activity() {
     @SuppressLint("ClickableViewAccessibility")
     private fun setupAdminGesture() {
         tvTime.setOnTouchListener { _, event ->
+            // While the admin has the device locked, the exit gesture is dead — the only way out
+            // is "Unlock" from the admin panel. (Taps are swallowed so arming can't build up.)
+            if (prefs.permLocked) return@setOnTouchListener true
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (footerArmed) {
