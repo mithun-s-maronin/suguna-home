@@ -13,8 +13,18 @@ class Prefs(context: Context) {
         get() = sp.getString("enrollment", "") ?: ""
         set(v) = sp.edit().putString("enrollment", v).apply()
 
-    /** True while the device is under a *permanent* lock that only the admin panel can release. */
+    /** True while under a remote lock (full-screen) that only the admin panel can release. */
     var permLocked: Boolean
         get() = sp.getBoolean("perm_locked", false)
         set(v) = sp.edit().putBoolean("perm_locked", v).apply()
+
+    /** Firebase anonymous-auth refresh token (persists this device's identity). */
+    var fbRefreshToken: String
+        get() = sp.getString("fb_refresh", "") ?: ""
+        set(v) = sp.edit().putString("fb_refresh", v).apply()
+
+    /** This device's Firebase uid — its record id in /devices. */
+    var fbUid: String
+        get() = sp.getString("fb_uid", "") ?: ""
+        set(v) = sp.edit().putString("fb_uid", v).apply()
 }

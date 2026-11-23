@@ -11,16 +11,11 @@ android {
         applicationId = "com.suguna.agent"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
-
-        val dbUrl = (project.findProperty("DB_URL") as String?) ?: System.getenv("DB_URL") ?: ""
-        val dbSecret = (project.findProperty("DB_SECRET") as String?) ?: System.getenv("DB_SECRET") ?: ""
-        buildConfigField("String", "FIREBASE_DB_URL", "\"$dbUrl\"")
-        buildConfigField("String", "FIREBASE_DB_SECRET", "\"$dbSecret\"")
+        versionCode = 4
+        versionName = "2.0"
+        // Firebase config lives in Config.kt (public web key + DB URL, safe to ship).
+        // No build-time secret — the agent authenticates with anonymous Firebase Auth.
     }
-
-    buildFeatures { buildConfig = true }
 
     // Same stable key as the fork so future agent updates install in place.
     signingConfigs {

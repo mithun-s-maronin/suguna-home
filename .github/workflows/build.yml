@@ -19,21 +19,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      - name: Build debug APKs (MDM + companion agent)
+        run: ./gradlew :app:assembleDebug :agent:assembleDebug --no-daemon --stacktrace
 
-      - name: Collect APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk SureMDM.apk
+      - name: Collect APKs
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk SureMDM.apk
+          cp agent/build/outputs/apk/debug/agent-debug.apk SugunaAgent.apk
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk
-          path: SureMDM.apk
+          name: apks
+          path: |
+            SureMDM.apk
+            SugunaAgent.apk
 
       - name: Publish to "latest" release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Latest builds
-          files: SureMDM.apk
+          files: |
+            SureMDM.apk
+            SugunaAgent.apk

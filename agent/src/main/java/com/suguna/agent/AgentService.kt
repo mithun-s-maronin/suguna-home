@@ -32,13 +32,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Companion agent service. Runs as a device ADMIN (not owner), so it can be added alongside the
- * existing fork without a reset. Every POLL_MS it checks in to Firebase (name, enrollment, battery,
- * GPS location, current foreground app, lock state) and runs commands from the admin panel:
- *   "lock"           -> dpm.lockNow()                       (student can unlock normally)
- *   "lock_permanent" -> full-screen overlay + lockNow(),    (only "unlock" from the panel releases it)
- *                       re-asserted on every cycle / reboot
- *   "unlock"         -> clears the permanent lock
+ * Companion agent service. Runs as a device ADMIN (not owner), so it installs alongside the
+ * existing MDM without a reset and without re-provisioning Device Owner. Every POLL_MS it signs
+ * in anonymously (FbAuth) and writes this tablet's status to /devices/<uid> (name, enrollment,
+ * battery, GPS, current app, lock state), then runs any command the admin panel left:
+ *   "lock"          -> full-screen lockdown overlay, only the panel's "unlock" releases it
+ *   "unlock"        -> remove the lock
+ *   "factory_reset" -> wipe the tablet (device-admin wipe; best-effort)
+ *
+ * Auth is Firebase Anonymous Auth over REST — no secret, only the public API key ships.
+ * (The MDM already handles the kiosk and screen-lock reset, which need Device Owner.)
  */
 class AgentService : Service() {
 
@@ -50,12 +53,7 @@ class AgentService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification())
-        // Re-assert a permanent lock that was in force before a restart / reboot.
         if (Prefs(this).permLocked) showOverlay()
-        if (BuildConfig.FIREBASE_DB_URL.isBlank() || BuildConfig.FIREBASE_DB_SECRET.isBlank()) {
-            Log.w(TAG, "No Firebase config baked in; agent idle.")
-            return START_STICKY
-        }
         if (!running) {
             running = true
             Thread { loop() }.start()
@@ -65,31 +63,32 @@ class AgentService : Service() {
 
     override fun onDestroy() { running = false; super.onDestroy() }
 
-    private fun base() = BuildConfig.FIREBASE_DB_URL.trimEnd('/')
-    private fun secret() = BuildConfig.FIREBASE_DB_SECRET
+    private fun base() = Config.FIREBASE_DB_URL.trimEnd('/')
     private fun dpm() = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
 
     private fun loop() {
         while (running) {
             if (Prefs(this).permLocked && overlay == null) showOverlay()
-            try { checkIn(); pollCommand() } catch (e: Exception) { Log.w(TAG, "cycle: ${e.message}") }
+            try {
+                val token = FbAuth.idToken(this)
+                if (token != null) { checkIn(token); pollCommand(token) }
+            } catch (e: Exception) { Log.w(TAG, "cycle: ${e.message}") }
             try { Thread.sleep(POLL_MS) } catch (e: InterruptedException) { break }
         }
     }
 
-    private fun deviceId(): String =
-        Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
-
-    private fun checkIn() {
+    private fun checkIn(token: String) {
+        val uid = FbAuth.uid(this) ?: return
         val prefs = Prefs(this)
         val body = JSONObject()
             .put("name", prefs.studentName)
             .put("enrollment", prefs.enrollmentNumber)
             .put("model", "${Build.MANUFACTURER} ${Build.MODEL}")
             .put("appVersion", "agent")
+            .put("androidId", Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID))
             .put("battery", batteryPct())
             .put("currentApp", foregroundApp())
-            .put("lockState", if (prefs.permLocked) "permanent" else "none")
+            .put("lockState", if (prefs.permLocked) "locked" else "none")
             .put("lastSeen", System.currentTimeMillis())
         val loc = lastLocation()
         if (loc != null) {
@@ -98,48 +97,43 @@ class AgentService : Service() {
             body.put("locAccuracy", loc.accuracy.toInt())
             body.put("locTime", loc.time)
         }
-        httpWrite("PATCH", "${base()}/devices/${deviceId()}.json?auth=${secret()}", body.toString())
+        httpWrite("PATCH", "${base()}/devices/$uid.json?auth=$token", body.toString())
     }
 
-    private fun pollCommand() {
-        val txt = httpRead("${base()}/devices/${deviceId()}/command.json?auth=${secret()}") ?: return
+    private fun pollCommand(token: String) {
+        val uid = FbAuth.uid(this) ?: return
+        val txt = httpRead("${base()}/devices/$uid/command.json?auth=$token") ?: return
         if (txt.isBlank() || txt == "null") return
         val action = try { JSONObject(txt).optString("action") } catch (e: Exception) { "" }
         if (action.isBlank()) return
         Log.i(TAG, "command: $action")
         // Consume the command so it only runs once.
-        httpWrite("DELETE", "${base()}/devices/${deviceId()}/command.json?auth=${secret()}", null)
-
+        httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
         when (action) {
-            "lock" -> lockNow()
-            "lock_permanent" -> {
-                Prefs(this).permLocked = true
-                showOverlay()
-                lockNow()
-            }
-            "unlock" -> {
-                Prefs(this).permLocked = false
-                hideOverlay()
-            }
+            "lock" -> { Prefs(this).permLocked = true; showOverlay() }
+            "unlock" -> { Prefs(this).permLocked = false; hideOverlay() }
+            "factory_reset" -> factoryReset()
+            // reset_screen_lock is Device-Owner only — handled by the MDM, not the agent.
         }
     }
 
-    private fun lockNow() {
+    private fun factoryReset() {
         val admin = AgentAdminReceiver.component(this)
-        if (dpm().isAdminActive(admin)) {
-            try { dpm().lockNow() } catch (e: Exception) { Log.w(TAG, "lock: ${e.message}") }
-        } else {
-            Log.w(TAG, "not an active admin; keyguard lock skipped")
+        if (!dpm().isAdminActive(admin)) { Log.w(TAG, "not an active admin; wipe skipped"); return }
+        try {
+            dpm().wipeData(0)
+        } catch (e: Exception) {
+            Log.w(TAG, "wipeData failed: ${e.message}")
         }
     }
 
-    // ---- Permanent-lock overlay --------------------------------------------------------------
+    // ---- Lock overlay ------------------------------------------------------------------------
 
     private fun showOverlay() {
         main.post {
             if (overlay != null) return@post
             if (!Settings.canDrawOverlays(this)) {
-                Log.w(TAG, "overlay permission not granted; permanent lock cannot cover the screen")
+                Log.w(TAG, "overlay permission not granted; lock cannot cover the screen")
                 return@post
             }
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -150,23 +144,16 @@ class AgentService : Service() {
                 isClickable = true
                 isFocusable = true
                 addView(TextView(this@AgentService).apply {
-                    text = "🔒"
-                    textSize = 64f
-                    gravity = Gravity.CENTER
+                    text = "🔒"; textSize = 64f; gravity = Gravity.CENTER
                 })
                 addView(TextView(this@AgentService).apply {
-                    text = "Device locked"
-                    setTextColor(Color.WHITE)
-                    textSize = 26f
-                    gravity = Gravity.CENTER
-                    setPadding(0, 32, 0, 0)
+                    text = "Device locked"; setTextColor(Color.WHITE); textSize = 26f
+                    gravity = Gravity.CENTER; setPadding(0, 32, 0, 0)
                 })
                 addView(TextView(this@AgentService).apply {
-                    text = "This device has been locked by the administrator.\nIt will be unlocked remotely."
-                    setTextColor(Color.parseColor("#9FB3C8"))
-                    textSize = 15f
-                    gravity = Gravity.CENTER
-                    setPadding(48, 16, 48, 0)
+                    text = "This tablet has been locked by the administrator.\nIt will be unlocked remotely."
+                    setTextColor(Color.parseColor("#9FB3C8")); textSize = 15f
+                    gravity = Gravity.CENTER; setPadding(48, 16, 48, 0)
                 })
             }
             val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -219,9 +206,9 @@ class AgentService : Service() {
 
     private fun usageAccessGranted(): Boolean = try {
         val ops = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = ops.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
-        mode == AppOpsManager.MODE_ALLOWED
+        ops.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName
+        ) == AppOpsManager.MODE_ALLOWED
     } catch (e: Exception) { false }
 
     private fun foregroundApp(): String {
@@ -242,8 +229,7 @@ class AgentService : Service() {
 
     private fun appLabel(pkg: String): String = try {
         val pm = packageManager
-        val label = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-        "$label|$pkg"
+        "${pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0))}|$pkg"
     } catch (e: Exception) { pkg }
 
     private fun batteryPct(): Int = try {
@@ -295,7 +281,7 @@ class AgentService : Service() {
         private const val TAG = "AgentService"
         private const val CHANNEL = "agent_mgmt"
         private const val NOTIF_ID = 43
-        private const val POLL_MS = 45_000L
+        private const val POLL_MS = 30_000L
 
         fun start(context: Context) {
             val i = Intent(context, AgentService::class.java)

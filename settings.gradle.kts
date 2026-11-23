@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SugunaHome"
 include(":app")
+include(":agent")
