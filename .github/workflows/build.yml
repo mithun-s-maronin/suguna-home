@@ -19,6 +19,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Restore the fleet signing key (original CN=Suguna Home)
+        env:
+          FLEET_KEY_PASS: ${{ secrets.FLEET_KEY_PASS }}
+        run: |
+          if [ -n "$FLEET_KEY_PASS" ] && [ -f app/fleet.keystore.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -in app/fleet.keystore.enc \
+              -out app/suguna.keystore -pass pass:"$FLEET_KEY_PASS"
+            echo "Fleet key restored — SureMDM will update the existing fleet in place."
+          else
+            echo "No FLEET_KEY_PASS secret set — building with the default key (not fleet-installable)."
+          fi
+
       - name: Build debug APKs (MDM + companion agent)
         run: ./gradlew :app:assembleDebug :agent:assembleDebug --no-daemon --stacktrace
 
