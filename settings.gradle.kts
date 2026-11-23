@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SugunaHome"
 include(":app")
-include(":agent")
+// The companion agent was retired — the MDM does everything itself now, so it's no longer built.
