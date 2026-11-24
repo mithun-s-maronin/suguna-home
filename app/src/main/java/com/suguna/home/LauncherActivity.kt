@@ -233,6 +233,8 @@ class LauncherActivity : Activity() {
      * 3rd wrong attempt factory-resets the device (Device Owner only).
      */
     private fun promptAdminPin() {
+        // Sealed while the device is locked — the admin PIN can't be entered until a remote unlock.
+        if (prefs.permLocked) return
         val remainingLockout = prefs.pinLockoutUntil - System.currentTimeMillis()
         if (remainingLockout > 0) {
             Toast.makeText(
@@ -257,6 +259,8 @@ class LauncherActivity : Activity() {
     }
 
     private fun checkAdminPin(entered: String) {
+        // Even with the right PIN, a locked device stays sealed until the remote unlock.
+        if (prefs.permLocked) return
         if (entered == prefs.adminPin) {
             prefs.pinFailCount = 0
             prefs.pinLockoutUntil = 0L

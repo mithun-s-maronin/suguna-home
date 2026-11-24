@@ -1,11 +1,15 @@
 package com.suguna.home
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
@@ -32,9 +36,25 @@ class AdminActivity : Activity() {
     /** packageName → its checkbox */
     private val checkBoxes = linkedMapOf<String, CheckBox>()
 
+    /** A locked device seals the admin panel shut; this closes it the instant a lock arrives. */
+    private val lockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (Prefs(this@AdminActivity).permLocked) {
+                Toast.makeText(this@AdminActivity, "Device locked by the administrator", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        // No admin panel while the device is locked — only the remote "unlock" can get in.
+        if (prefs.permLocked) {
+            Toast.makeText(this, "Device is locked — unlock it from the admin panel first", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         setContentView(R.layout.activity_admin)
 
         etVersion = findViewById(R.id.etVersion)
@@ -93,7 +113,21 @@ class AdminActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (::prefs.isInitialized && prefs.permLocked) { finish(); return }
+        try {
+            val filter = IntentFilter(LauncherActivity.ACTION_LOCK_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(lockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag") registerReceiver(lockReceiver, filter)
+            }
+        } catch (e: Exception) { /* ignore */ }
         if (::prefs.isInitialized) updateAdminStatus()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try { unregisterReceiver(lockReceiver) } catch (e: Exception) { /* not registered */ }
     }
 
     // ── Admin & exit ───────────────────────────────────────────────────
