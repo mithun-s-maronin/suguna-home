@@ -164,10 +164,11 @@ class RemoteAdminService : Service() {
         httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
         when (action) {
             "lock" -> {
-                // Lock only seals the admin/exit panel — the tablet otherwise works normally
-                // (home screen, apps, buttons all fine). notifyLockState() shuts the admin panel
-                // immediately if it happens to be open.
+                // Lock seals the admin/exit panel only — the tablet otherwise works normally
+                // (apps, buttons all fine). Bring the MDM home screen to the front, then shut the
+                // admin panel immediately if it happens to be open.
                 Prefs(this).permLocked = true
+                try { Kiosk.relaunchHome(this) } catch (e: Exception) { Log.w(TAG, "relaunchHome: ${e.message}") }
                 notifyLockState()
             }
             "unlock" -> {
