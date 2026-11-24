@@ -52,14 +52,11 @@ import java.net.URL
 class RemoteAdminService : Service() {
 
     @Volatile private var running = false
-    private val main = Handler(Looper.getMainLooper())
-    private var overlay: View? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIF_ID, buildNotification())
-        if (Prefs(this).permLocked) showOverlay()
         // Provision the reset-password token early so "reset screen lock" works later.
         try { Kiosk.provisionResetToken(this) } catch (e: Exception) { Log.w(TAG, "token: ${e.message}") }
         if (!running) {
@@ -79,7 +76,6 @@ class RemoteAdminService : Service() {
 
     private fun loop() {
         while (running) {
-            if (Prefs(this).permLocked && overlay == null) showOverlay()
             try {
                 val token = FbAuth.idToken(this)
                 if (token != null) checkIn(token)
@@ -170,16 +166,16 @@ class RemoteAdminService : Service() {
             "lock" -> {
                 Prefs(this).permLocked = true
                 // Pin to the MDM alone and snap to the home screen (kicks the student out of any
-                // app they're in), then cover it with the locked screen.
+                // app they're in). The launcher draws the locked banner and blocks all taps.
                 try { Kiosk.lockToMdm(this) } catch (e: Exception) { Log.w(TAG, "lockToMdm: ${e.message}") }
-                showOverlay()
+                notifyLockState()
             }
             "unlock" -> {
                 Prefs(this).permLocked = false
-                hideOverlay()
                 // Restore the normal allowlist (student apps + store) by re-applying the kiosk on
-                // the home screen.
+                // the home screen; the launcher clears the locked banner.
                 try { Kiosk.relaunchHome(this) } catch (e: Exception) { Log.w(TAG, "relaunchHome: ${e.message}") }
+                notifyLockState()
             }
             "factory_reset" -> Kiosk.factoryReset(this)
             "reset_screen_lock" -> {
@@ -194,71 +190,14 @@ class RemoteAdminService : Service() {
         }
     }
 
+    /** Tell a visible launcher to show/hide its locked banner immediately. */
+    private fun notifyLockState() {
+        try {
+            sendBroadcast(Intent(LauncherActivity.ACTION_LOCK_STATE_CHANGED).setPackage(packageName))
+        } catch (e: Exception) { Log.w(TAG, "notifyLockState: ${e.message}") }
+    }
+
     private fun trySleep(ms: Long) { try { Thread.sleep(ms) } catch (e: InterruptedException) {} }
-
-    // ── Lock overlay ────────────────────────────────────────────────────────
-
-    private fun showOverlay() {
-        main.post {
-            if (overlay != null) return@post
-            if (!Settings.canDrawOverlays(this)) {
-                Log.w(TAG, "overlay permission not granted; lock cannot cover the screen")
-                return@post
-            }
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val view = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setBackgroundColor(Color.parseColor("#0D1B2A"))
-                isClickable = true
-                isFocusable = true
-                addView(TextView(this@RemoteAdminService).apply {
-                    text = "🔒"
-                    textSize = 64f
-                    gravity = Gravity.CENTER
-                })
-                addView(TextView(this@RemoteAdminService).apply {
-                    text = "Device locked"
-                    setTextColor(Color.WHITE)
-                    textSize = 26f
-                    gravity = Gravity.CENTER
-                    setPadding(0, 32, 0, 0)
-                })
-                addView(TextView(this@RemoteAdminService).apply {
-                    text = "This tablet has been locked by the administrator.\nIt will be unlocked remotely."
-                    setTextColor(Color.parseColor("#9FB3C8"))
-                    textSize = 15f
-                    gravity = Gravity.CENTER
-                    setPadding(48, 16, 48, 0)
-                })
-            }
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-            val lp = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                type,
-                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_FULLSCREEN or
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
-                PixelFormat.OPAQUE,
-            )
-            try { wm.addView(view, lp); overlay = view }
-            catch (e: Exception) { Log.w(TAG, "overlay add: ${e.message}") }
-        }
-    }
-
-    private fun hideOverlay() {
-        main.post {
-            val v = overlay ?: return@post
-            try {
-                (getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(v)
-            } catch (e: Exception) { Log.w(TAG, "overlay remove: ${e.message}") }
-            overlay = null
-        }
-    }
 
     // ── Telemetry helpers ────────────────────────────────────────────────────
 
