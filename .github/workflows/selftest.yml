@@ -1,0 +1,70 @@
+name: Self-test (Firebase command pipeline)
+
+# Live end-to-end test of the device side of the admin link, against the real
+# Realtime Database. Simulates a tablet: anonymous sign-in, writes its record,
+# opens the live command event-stream, then pushes lock/unlock commands and
+# checks they arrive instantly. Cleans up after itself.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the pipeline test
+        run: |
+          set -e
+          KEY="AIzaSyAMKqrsk5QLaHulz36-mOgcFD1b_OResjI"
+          DB="https://suguna-admin-eee8b-default-rtdb.europe-west1.firebasedatabase.app"
+          PASS=0; FAIL=0
+          ok(){ echo "PASS: $1"; PASS=$((PASS+1)); }
+          bad(){ echo "FAIL: $1"; FAIL=$((FAIL+1)); }
+
+          echo "=== 1. Anonymous sign-in (a device enrolling) ==="
+          SIGN=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" \
+            -H "Content-Type: application/json" -d '{"returnSecureToken":true}')
+          TOKEN=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('idToken',''))")
+          DUID=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('localId',''))")
+          if [ -n "$TOKEN" ] && [ -n "$DUID" ]; then ok "anonymous sign-in (uid=$DUID)"; else bad "anonymous sign-in: $SIGN"; exit 1; fi
+
+          echo "=== 2. Device check-in (PATCH its own record) ==="
+          BODY='{"name":"SELFTEST","enrollment":"TEST001","model":"CI Runner","appVersion":"2.6","androidId":"selftest-aid-001","battery":77,"currentApp":"Z Exam|com.z.exam","lockState":"none","lastSeen":1}'
+          CODE=$(curl -s -o /tmp/patch.json -w "%{http_code}" -X PATCH "$DB/devices/$DUID.json?auth=$TOKEN" -H "Content-Type: application/json" -d "$BODY")
+          if [ "$CODE" = "200" ]; then ok "check-in write (HTTP 200)"; else bad "check-in write HTTP $CODE: $(cat /tmp/patch.json)"; fi
+
+          echo "=== 3. Read record back, verify all panel fields present ==="
+          REC=$(curl -s "$DB/devices/$DUID.json?auth=$TOKEN")
+          echo "record: $REC"
+          for f in name enrollment model appVersion androidId battery currentApp lockState lastSeen; do
+            if echo "$REC" | python3 -c "import sys,json;d=json.load(sys.stdin);exit(0 if '$f' in d else 1)"; then ok "field '$f' present"; else bad "field '$f' MISSING"; fi
+          done
+
+          echo "=== 4. Live command stream: lock + unlock delivered instantly ==="
+          ( timeout 22 curl -sN -H "Accept: text/event-stream" "$DB/devices/$DUID/command.json?auth=$TOKEN" > /tmp/stream.txt ) &
+          sleep 5
+          echo "-- pushing lock --"
+          curl -s -X PUT "$DB/devices/$DUID/command.json?auth=$TOKEN" -H "Content-Type: application/json" -d '{"action":"lock","ts":111}' >/dev/null
+          sleep 5
+          echo "-- pushing unlock --"
+          curl -s -X PUT "$DB/devices/$DUID/command.json?auth=$TOKEN" -H "Content-Type: application/json" -d '{"action":"unlock","ts":222}' >/dev/null
+          sleep 6
+          wait 2>/dev/null || true
+          echo "--- raw stream ---"; cat /tmp/stream.txt; echo "---"
+          if grep -q '"action":"lock"' /tmp/stream.txt; then ok "lock pushed over stream (instant)"; else bad "lock NOT received on stream"; fi
+          if grep -q '"action":"unlock"' /tmp/stream.txt; then ok "unlock pushed over stream (instant)"; else bad "unlock NOT received on stream"; fi
+
+          echo "=== 5. Security: anonymous cannot list the whole fleet (admin-only) ==="
+          LCODE=$(curl -s -o /tmp/list.json -w "%{http_code}" "$DB/devices.json?auth=$TOKEN")
+          if [ "$LCODE" = "401" ]; then ok "fleet list denied to a device (HTTP 401)"; else bad "fleet list returned HTTP $LCODE (expected 401): $(cat /tmp/list.json)"; fi
+
+          echo "=== 6. Security: a device cannot claim the activation lock (/devices/__admin__) ==="
+          ACODE=$(curl -s -o /tmp/adm.json -w "%{http_code}" -X PUT "$DB/devices/__admin__.json?auth=$TOKEN" -H "Content-Type: application/json" -d '{"boundAndroidId":"hacker"}')
+          if [ "$ACODE" = "401" ]; then ok "activation node write denied to a device (HTTP 401)"; else bad "activation write returned HTTP $ACODE (expected 401): $(cat /tmp/adm.json)"; fi
+
+          echo "=== 7. Cleanup ==="
+          curl -s -X DELETE "$DB/devices/$DUID.json?auth=$TOKEN" >/dev/null && ok "test record deleted"
+
+          echo ""
+          echo "==================== RESULT: $PASS passed, $FAIL failed ===================="
+          if [ "$FAIL" -ne 0 ]; then exit 1; fi
