@@ -21,6 +21,7 @@ object Perms {
 
     fun hasOverlay(c: Context): Boolean = Settings.canDrawOverlays(c)
 
-    /** True once the gate's permissions are in place (usage access for current-app, overlay for lock). */
-    fun allGranted(c: Context): Boolean = hasUsageAccess(c) && hasOverlay(c)
+    /** True once the gate's permission is in place. Only usage access is needed now (for the
+     *  current-app field in the panel); the lock no longer uses a system overlay. */
+    fun allGranted(c: Context): Boolean = hasUsageAccess(c)
 }

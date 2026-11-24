@@ -59,15 +59,12 @@ class PermissionGateActivity : Activity() {
     private fun build() {
         root.removeAllViews()
         root.addView(title("Finish setup"))
-        root.addView(sub("This update added a couple of features. Grant these so the admin panel " +
-            "sees the current app and can lock the tablet. You'll only do this once."))
+        root.addView(sub("Grant this so the admin panel can see which app is open. " +
+            "You'll only do this once."))
 
         row("Usage access (current app)", Perms.hasUsageAccess(this)) {
             toast("Find \"Sure MDM\" in the list and turn it on")
             open(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-        }
-        row("Display over other apps (lock)", Perms.hasOverlay(this)) {
-            open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         }
 
         val done = Perms.allGranted(this)
