@@ -51,15 +51,13 @@ object Kiosk {
 
         try {
             // Allowlist the launcher AND the apps on the home screen, otherwise lock-task blocks
-            // them from opening. Without this the three student apps can't be launched.
-            // When the admin has LOCKED the device, pin to the MDM alone — no student apps, no
-            // store — so the device is stuck on this home screen until the panel unlocks it.
+            // them from opening. Without this the three student apps can't be launched. The admin
+            // "lock" command does NOT change this — a locked device still works normally; lock only
+            // seals the admin/exit panel.
             val allow = linkedSetOf(activity.packageName)
-            if (!Prefs(activity).permLocked) {
-                allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
-                allow.addAll(Prefs(activity).pinnedApps)
-                allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
-            }
+            allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+            allow.addAll(Prefs(activity).pinnedApps)
+            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
             dpm.setLockTaskPackages(admin, allow.toTypedArray())
         } catch (e: Exception) {
             Log.w(TAG, "setLockTaskPackages failed: ${e.message}")

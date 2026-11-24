@@ -164,17 +164,14 @@ class RemoteAdminService : Service() {
         httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
         when (action) {
             "lock" -> {
+                // Lock only seals the admin/exit panel — the tablet otherwise works normally
+                // (home screen, apps, buttons all fine). notifyLockState() shuts the admin panel
+                // immediately if it happens to be open.
                 Prefs(this).permLocked = true
-                // Pin to the MDM alone and snap to the home screen (kicks the student out of any
-                // app they're in). The launcher draws the locked banner and blocks all taps.
-                try { Kiosk.lockToMdm(this) } catch (e: Exception) { Log.w(TAG, "lockToMdm: ${e.message}") }
                 notifyLockState()
             }
             "unlock" -> {
                 Prefs(this).permLocked = false
-                // Restore the normal allowlist (student apps + store) by re-applying the kiosk on
-                // the home screen; the launcher clears the locked banner.
-                try { Kiosk.relaunchHome(this) } catch (e: Exception) { Log.w(TAG, "relaunchHome: ${e.message}") }
                 notifyLockState()
             }
             "factory_reset" -> Kiosk.factoryReset(this)

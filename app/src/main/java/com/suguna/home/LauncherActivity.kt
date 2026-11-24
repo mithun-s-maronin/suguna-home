@@ -99,12 +99,6 @@ class LauncherActivity : Activity() {
     private var footerArmed = false
     private var holdRunnable: Runnable? = null
 
-    /** The locked scrim shown over the whole launcher when the admin locks the device. */
-    private var lockScrim: View? = null
-    private val lockReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = applyLockUi()
-    }
-
     /** Change the volume on key press but don't show the system volume slider on the home screen. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         when (event.keyCode) {
@@ -310,23 +304,12 @@ class LauncherActivity : Activity() {
         // Device Owner only: hide Home + Recents, block the shade, keep Back and the bar. Silent
         // (no screen pinning). A normally-installed app behaves like an ordinary launcher.
         Kiosk.applyKiosk(this)
-        // Listen for lock/unlock pushed from the admin service, and reflect the current state now.
-        try {
-            val filter = IntentFilter(ACTION_LOCK_STATE_CHANGED)
-            if (Build.VERSION.SDK_INT >= 33) {
-                registerReceiver(lockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag") registerReceiver(lockReceiver, filter)
-            }
-        } catch (e: Exception) { Log.w(TAG, "lock receiver: ${e.message}") }
-        applyLockUi()
     }
 
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(clockRunnable)
         unregisterNetworkCallback()
-        try { unregisterReceiver(lockReceiver) } catch (e: Exception) { /* not registered */ }
     }
 
     override fun onDestroy() {
@@ -337,55 +320,6 @@ class LauncherActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         // Home screen: Back does nothing (same as the original).
-    }
-
-    // ── Locked state (admin "lock" command) ────────────────────────────
-
-    /**
-     * When the admin locks the device, the tablet is pinned to this launcher (lock-task allows only
-     * the MDM) and a full-screen scrim is drawn over it: the student sees the home screen through a
-     * dimmed overlay but every tap — app tiles, buttons, the admin gesture — is swallowed, so there
-     * is no way off this page until the panel sends "unlock".
-     */
-    private fun applyLockUi() {
-        if (!::prefs.isInitialized) return
-        if (prefs.permLocked) showLockScrim() else hideLockScrim()
-    }
-
-    private fun showLockScrim() {
-        if (lockScrim != null) return
-        val content = findViewById<ViewGroup>(android.R.id.content) ?: return
-        // A full-screen, mostly transparent touch-blocker: the launcher stays visible beneath it
-        // ("this page"), only slightly dimmed, but every tap is swallowed so nothing can be opened
-        // and there's no way off the home screen. A banner at the top makes the locked state clear.
-        val scrim = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0x33000000)           // ~20% dim, launcher clearly shows through
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { /* swallow every tap across the whole screen */ }
-            addView(LinearLayout(this@LauncherActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                setBackgroundColor(0xF2F44336.toInt())   // solid red bar
-                setPadding(dp(16), dp(14), dp(16), dp(14))
-                addView(TextView(this@LauncherActivity).apply {
-                    text = "🔒  Locked by your institution — ask your teacher to unlock"
-                    setTextColor(Color.WHITE); textSize = 16f; gravity = Gravity.CENTER
-                })
-            })
-        }
-        content.addView(
-            scrim,
-            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-        )
-        lockScrim = scrim
-    }
-
-    private fun hideLockScrim() {
-        val s = lockScrim ?: return
-        (s.parent as? ViewGroup)?.removeView(s)
-        lockScrim = null
     }
 
     // ── Wallpaper ──────────────────────────────────────────────────────
