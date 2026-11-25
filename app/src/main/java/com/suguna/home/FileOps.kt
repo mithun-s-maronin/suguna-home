@@ -1,5 +1,7 @@
 package com.suguna.home
 
+import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Environment
 import android.util.Base64
@@ -26,7 +28,7 @@ object FileOps {
     fun defaultRoot(): String = Environment.getExternalStorageDirectory().absolutePath
 
     /** Run one file command and return the JSON result to publish at /devices/<uid>/fileResult. */
-    fun handle(cmd: JSONObject): JSONObject {
+    fun handle(context: Context, cmd: JSONObject): JSONObject {
         val action = cmd.optString("action")
         val path = cmd.optString("path")
         val res = JSONObject()
@@ -42,7 +44,7 @@ object FileOps {
             when (action) {
                 "list_dir" -> listDir(path, res)
                 "read_file" -> readFile(path, res)
-                "delete_file" -> deleteFile(path, res)
+                "delete_file" -> deleteFile(context, path, res)
                 "write_file" -> writeFile(path, cmd.optString("b64"), res)
                 else -> res.put("ok", false).put("error", "unknown action")
             }
@@ -83,10 +85,18 @@ object FileOps {
             .put("b64", Base64.encodeToString(f.readBytes(), Base64.NO_WRAP))
     }
 
-    private fun deleteFile(path: String, res: JSONObject): JSONObject {
+    private fun deleteFile(context: Context, path: String, res: JSONObject): JSONObject {
         val f = File(path)
         if (!f.exists()) return res.put("ok", false).put("error", "not found")
-        val ok = f.deleteRecursively()
+        // Collect the real file paths first so we can purge their MediaStore entries after the
+        // hard delete — otherwise a deleted photo/video can linger as a stale thumbnail in Gallery.
+        val paths = ArrayList<String>()
+        if (f.isDirectory) f.walkBottomUp().filter { it.isFile }.take(5000).forEach { paths.add(it.absolutePath) }
+        else paths.add(f.absolutePath)
+        val ok = f.deleteRecursively()   // permanent, no recycle bin
+        if (ok && paths.isNotEmpty()) {
+            try { MediaScannerConnection.scanFile(context, paths.toTypedArray(), null, null) } catch (e: Exception) {}
+        }
         return if (ok) res.put("ok", true) else res.put("ok", false).put("error", "delete failed")
     }
 

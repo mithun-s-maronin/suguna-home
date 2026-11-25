@@ -184,7 +184,7 @@ class RemoteAdminService : Service() {
             "list_dir", "read_file", "delete_file", "write_file" -> {
                 // File-browser ops: run off the stream thread and publish the result for the panel.
                 Thread {
-                    val result = FileOps.handle(cmd)
+                    val result = FileOps.handle(this, cmd)
                     httpWrite("PUT", "${base()}/devices/$uid/fileResult.json?auth=$token", result.toString())
                 }.start()
             }
