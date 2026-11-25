@@ -258,24 +258,6 @@ object Kiosk {
         catch (e: Exception) { Log.w(TAG, "allowSettingsInLockTask: ${e.message}") }
     }
 
-    /** As Device Owner, silently grant ourselves location (a runtime permission) — no prompt. */
-    fun grantSelfLocation(context: Context) {
-        if (!isDeviceOwner(context)) return
-        val dpm = dpm(context)
-        val admin = MdmDeviceAdminReceiver.component(context)
-        for (perm in arrayOf(
-            android.Manifest.permission.ACCESS_FINE_LOCATION,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION,
-        )) {
-            try {
-                dpm.setPermissionGrantState(
-                    admin, context.packageName, perm,
-                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED,
-                )
-            } catch (e: Exception) { Log.w(TAG, "grant $perm: ${e.message}") }
-        }
-    }
-
     // ── Remote reset of the student's screen lock ──────────────────────────
 
     /**
@@ -318,17 +300,6 @@ object Kiosk {
             Log.w(TAG, "resetScreenLock failed: ${e.message}"); false
         }
     }
-
-    // ── Anti-escape watchdog support ───────────────────────────────────────
-
-    /** Packages that register as a HOME launcher, excluding ours — i.e. "the real home screen". */
-    fun otherHomeLaunchers(context: Context): Set<String> = try {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        context.packageManager.queryIntentActivities(intent, 0)
-            .mapNotNull { it.activityInfo?.packageName }
-            .filter { it != context.packageName }
-            .toSet()
-    } catch (e: Exception) { emptySet() }
 
     /**
      * Admin "lock" command: pin the device to the MDM alone and snap it to the home screen.

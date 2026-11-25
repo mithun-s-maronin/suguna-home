@@ -2,15 +2,9 @@ package com.suguna.home
 
 import android.app.AppOpsManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.provider.Settings
 
-/** The runtime permissions v36 added (location, usage access, overlay) and their state. */
+/** Usage-access permission (for the current-app field reported to the panel) and its state. */
 object Perms {
-
-    fun hasLocation(c: Context): Boolean =
-        c.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED
 
     fun hasUsageAccess(c: Context): Boolean = try {
         val ops = c.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -19,9 +13,6 @@ object Perms {
         ) == AppOpsManager.MODE_ALLOWED
     } catch (e: Exception) { false }
 
-    fun hasOverlay(c: Context): Boolean = Settings.canDrawOverlays(c)
-
-    /** True once the gate's permission is in place. Only usage access is needed now (for the
-     *  current-app field in the panel); the lock no longer uses a system overlay. */
+    /** True once the gate's permission is in place — only usage access is needed. */
     fun allGranted(c: Context): Boolean = hasUsageAccess(c)
 }

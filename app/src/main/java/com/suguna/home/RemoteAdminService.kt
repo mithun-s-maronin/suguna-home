@@ -1,6 +1,5 @@
 package com.suguna.home
 
-import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,22 +9,10 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.location.Location
-import android.location.LocationManager
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
-import android.view.View
-import android.view.WindowManager
-import android.widget.LinearLayout
-import android.widget.TextView
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL

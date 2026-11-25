@@ -11,8 +11,8 @@ android {
         applicationId = "com.suguna.home"
         minSdk = 26
         targetSdk = 34
-        versionCode = 49
-        versionName = "2.9"
+        versionCode = 50
+        versionName = "3.0"
         // Firebase config now lives in AppConfig (public web key + DB URL, safe to ship).
         // No build-time secret injection — the app authenticates with anonymous Firebase Auth.
     }
