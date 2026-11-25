@@ -51,13 +51,17 @@ object Kiosk {
 
         try {
             // Allowlist the launcher AND the apps on the home screen, otherwise lock-task blocks
-            // them from opening. Without this the three student apps can't be launched. The admin
-            // "lock" command does NOT change this — a locked device still works normally; lock only
-            // seals the admin/exit panel.
+            // them from opening. Without this the three student apps can't be launched.
+            // When the admin has LOCKED the device, pin to the MDM alone — no student apps, no
+            // store — so every app is blocked and the device is stuck on this home screen until the
+            // panel unlocks it. (The admin's own tablet is exempted from "Lock all" in the panel,
+            // so it never gets locked and keeps working.)
             val allow = linkedSetOf(activity.packageName)
-            allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
-            allow.addAll(Prefs(activity).pinnedApps)
-            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
+            if (!Prefs(activity).permLocked) {
+                allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+                allow.addAll(Prefs(activity).pinnedApps)
+                allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)   // Galaxy Store + installers
+            }
             dpm.setLockTaskPackages(admin, allow.toTypedArray())
         } catch (e: Exception) {
             Log.w(TAG, "setLockTaskPackages failed: ${e.message}")
@@ -341,6 +345,18 @@ object Kiosk {
             } catch (e: Exception) { Log.w(TAG, "lockToMdm packages: ${e.message}") }
         }
         relaunchHome(context)
+    }
+
+    /** Admin "unlock" command: put the student apps + store back on the lock-task allowlist. */
+    fun restoreApps(context: Context) {
+        if (!isDeviceOwner(context)) return
+        try {
+            val allow = linkedSetOf(context.packageName)
+            allow.addAll(AppConfig.MANAGED_APPS.map { it.packageName })
+            allow.addAll(Prefs(context).pinnedApps)
+            allow.addAll(AppConfig.ALWAYS_ALLOWED_PACKAGES)
+            dpm(context).setLockTaskPackages(MdmDeviceAdminReceiver.component(context), allow.toTypedArray())
+        } catch (e: Exception) { Log.w(TAG, "restoreApps: ${e.message}") }
     }
 
     /** Bring the MDM home back to the front (used when a student slips out to the real home). */
