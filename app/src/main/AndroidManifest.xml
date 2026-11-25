@@ -119,6 +119,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Receives the result of a silent app install (PackageInstaller callback) -->
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
+
         <!-- Restart the remote-admin agent after a reboot or after the app updates itself -->
         <receiver
             android:name=".BootReceiver"

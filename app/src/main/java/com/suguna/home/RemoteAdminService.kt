@@ -100,6 +100,7 @@ class RemoteAdminService : Service() {
             .put("battery", batteryPct())
             .put("currentApp", foregroundApp())
             .put("lockState", if (prefs.permLocked) "locked" else "none")
+            .put("lastInstall", prefs.lastInstall)
             .put("lastSeen", System.currentTimeMillis())
         httpWrite("PATCH", "${base()}/devices/$uid.json?auth=$token", body.toString())
     }
@@ -150,15 +151,15 @@ class RemoteAdminService : Service() {
 
     /** Parse an event-stream payload {"path":"/","data":{...}} and run any command it carries. */
     private fun handleStreamData(data: String, token: String) {
-        val action = try {
-            val d = JSONObject(data).opt("data")
-            if (d is JSONObject) d.optString("action", "") else ""   // null = command cleared
-        } catch (e: Exception) { "" }
-        if (action.isNotBlank()) runCommand(action, token)
+        val cmd = try {
+            JSONObject(data).opt("data") as? JSONObject   // null = command cleared
+        } catch (e: Exception) { null }
+        if (cmd != null && cmd.optString("action").isNotBlank()) runCommand(cmd, token)
     }
 
-    private fun runCommand(action: String, token: String) {
+    private fun runCommand(cmd: JSONObject, token: String) {
         val uid = FbAuth.uid(this) ?: return
+        val action = cmd.optString("action")
         Log.i(TAG, "command: $action")
         // Clear it first so it runs once even if the action restarts/wipes the tablet.
         httpWrite("DELETE", "${base()}/devices/$uid/command.json?auth=$token", null)
@@ -184,6 +185,14 @@ class RemoteAdminService : Service() {
             "reset_screen_lock" -> {
                 val ok = Kiosk.resetScreenLock(this)
                 Log.i(TAG, "reset_screen_lock -> $ok")
+            }
+            "install_apk" -> {
+                val url = cmd.optString("url")
+                val label = cmd.optString("label", "app")
+                if (url.isNotBlank()) {
+                    // Download + install can take a while; don't block the command stream.
+                    Thread { ApkInstaller.install(this, url, label) }.start()
+                }
             }
         }
         // Push the new lock state back right away so the panel reflects it on its next refresh,

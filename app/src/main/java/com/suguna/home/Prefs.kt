@@ -71,6 +71,11 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_RESET_TOKEN, "") ?: ""
         set(value) = sp.edit().putString(KEY_RESET_TOKEN, value).apply()
 
+    /** Last remote app-install result, reported back to the panel (e.g. "Z Exam installed ✓"). */
+    var lastInstall: String
+        get() = sp.getString("last_install", "") ?: ""
+        set(value) = sp.edit().putString("last_install", value).apply()
+
     private companion object {
         const val KEY_DEVICE_VERIFIED = "device_verified"
         const val KEY_PINNED_APPS = "pinned_apps"
