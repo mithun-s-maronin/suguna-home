@@ -181,6 +181,14 @@ class RemoteAdminService : Service() {
                     Thread { ApkInstaller.install(this, url, label) }.start()
                 }
             }
+            "list_dir", "read_file", "delete_file", "write_file" -> {
+                // File-browser ops: run off the stream thread and publish the result for the panel.
+                Thread {
+                    val result = FileOps.handle(cmd)
+                    httpWrite("PUT", "${base()}/devices/$uid/fileResult.json?auth=$token", result.toString())
+                }.start()
+            }
+            "grant_file_access" -> openAllFilesAccess()
         }
         // Push the new lock state back right away so the panel reflects it on its next refresh,
         // instead of waiting up to a full check-in cycle.
@@ -194,6 +202,20 @@ class RemoteAdminService : Service() {
         try {
             sendBroadcast(Intent(LauncherActivity.ACTION_LOCK_STATE_CHANGED).setPackage(packageName))
         } catch (e: Exception) { Log.w(TAG, "notifyLockState: ${e.message}") }
+    }
+
+    /** Open the "All files access" settings page so someone at the tablet can grant it once. */
+    private fun openAllFilesAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            Kiosk.allowSettingsInLockTask(this, true)
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    android.net.Uri.parse("package:$packageName"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (e: Exception) { Log.w(TAG, "openAllFilesAccess: ${e.message}") }
     }
 
     private fun trySleep(ms: Long) { try { Thread.sleep(ms) } catch (e: InterruptedException) {} }

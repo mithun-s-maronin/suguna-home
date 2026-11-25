@@ -16,7 +16,8 @@ object AppConfig {
      */
     val MANAGED_APPS = listOf(
         ManagedApp(
-            packageName = "com.example.suguna_student_app",
+            // Student app was rebranded: com.example.suguna_student_app -> com.z7i.student
+            packageName = "com.z7i.student",
             downloadUrl = "https://z7imobileapps.s3.ap-south-1.amazonaws.com/student.apk",
         ),
         ManagedApp(

@@ -20,6 +20,9 @@
     <!-- Remote-admin agent: foreground service that checks in and runs lock/factory-reset commands -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Remote file browser: read/write shared storage on Android 11+ (granted once per tablet) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Report which app is in the foreground (special access, granted in Settings) -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -34,7 +37,7 @@
 
     <!-- Android 11+ hides other apps unless we declare which ones we look at -->
     <queries>
-        <package android:name="com.example.suguna_student_app" />
+        <package android:name="com.z7i.student" />
         <package android:name="com.suguna.suguna_assignment_app" />
         <package android:name="com.example.suguna_exam_app" />
         <intent>
