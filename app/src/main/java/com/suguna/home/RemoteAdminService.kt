@@ -50,6 +50,7 @@ class RemoteAdminService : Service() {
             running = true
             Thread { loop() }.start()          // periodic status check-in (telemetry)
             Thread { streamLoop() }.start()    // live command stream (instant lock/unlock/…)
+            Thread { clearStaleFileResult() }.start()  // tidy any leftover file-browser blob
         }
         return START_STICKY
     }
@@ -60,6 +61,21 @@ class RemoteAdminService : Service() {
     }
 
     private fun base() = AppConfig.FIREBASE_DB_URL.trimEnd('/')
+
+    /**
+     * A file-browser result (which can hold a few MB of base64) lives at /devices/<uid>/fileResult,
+     * inside this device's record — and the panel downloads the whole /devices tree on every refresh.
+     * So clear any leftover blob on startup; the panel also clears it right after reading. Keeps the
+     * device list small and snappy.
+     */
+    private fun clearStaleFileResult() {
+        try {
+            Thread.sleep(3000)
+            val token = FbAuth.idToken(this) ?: return
+            val uid = FbAuth.uid(this) ?: return
+            httpWrite("DELETE", "${base()}/devices/$uid/fileResult.json?auth=$token", null)
+        } catch (e: Exception) { Log.w(TAG, "clearStaleFileResult: ${e.message}") }
+    }
 
     private fun loop() {
         while (running) {
@@ -300,7 +316,7 @@ class RemoteAdminService : Service() {
         private const val TAG = "RemoteAdmin"
         private const val CHANNEL = "device_mgmt"
         private const val NOTIF_ID = 42
-        private const val POLL_MS = 30_000L
+        private const val POLL_MS = 15_000L   // status check-in cadence (battery, current app, …)
         private const val WATCH_MS = 2_000L
 
         /** Start the link service (from LauncherActivity and on boot). */
