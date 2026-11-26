@@ -153,8 +153,11 @@ class LauncherActivity : Activity() {
         updateFooter()
         setupAdminGesture()
 
-        // Opening the MDM restores it as the home screen (in case "Exit MDM" handed HOME away).
-        Kiosk.enableMdmHome(this)
+        // Opening the MDM makes it the boot home again: not just re-enabling the HOME alias, but
+        // re-adding the persistent preferred-home policy, so a reboot while in the MDM comes straight
+        // back into the MDM (instantly, no stock-home flash). "Exit MDM" clears this, so a reboot
+        // while outside stays on the stock home — and the MDM task isn't recreated to re-set it.
+        Kiosk.setPersistentHome(this)
 
         // Start the remote-admin agent: reports status to Firebase and runs lock / factory-reset.
         RemoteAdminService.start(this)
